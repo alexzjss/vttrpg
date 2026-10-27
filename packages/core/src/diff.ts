@@ -8,7 +8,12 @@ export type Change =
   | { kind: 'setScene'; scene: Omit<Scene, 'tokens'> } | { kind: 'setEncounter'; encounter: ProjectedEncounter }
   | { kind: 'setName'; name: string };
 
-export interface ProjectedUpdate { revision: number; changes: Change[]; cues: Cue[] }
+/**
+ * `baseRevision` é a última revisão entregue a esta audiência: o cliente só aplica o
+ * update se seu estado estiver exatamente nela (revisões invisíveis à audiência não
+ * geram update, então `revision` pode saltar sem que haja lacuna real).
+ */
+export interface ProjectedUpdate { revision: number; baseRevision: number; changes: Change[]; cues: Cue[] }
 
 /** JSON com chaves ordenadas, para comparação estrutural. */
 export function stableStringify(value: unknown): string {

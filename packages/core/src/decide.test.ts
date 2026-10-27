@@ -60,6 +60,17 @@ describe('moveToken', () => {
       { type: 'tokenMoved', tokenId: 't1', from: { col: 1, row: 1 }, to: { col: 3, row: 3 } },
     ]);
   });
+  it('jogador move para célula com token oculto (aceito); mestre recebe cell_occupied', () => {
+    const s = applyEvents(base(), [
+      { type: 'tokenPlaced', token: { id: 'h1', characterId: 'p2', cell: { col: 3, row: 3 }, size: 1, hidden: true } },
+    ]);
+    const cmd: Command = { type: 'moveToken', tokenId: 't1', to: { col: 3, row: 3 } };
+    expect(err(s, cmd, P1)).toBe('ok');
+    expect(err(s, cmd, GM)).toBe('cell_occupied');
+  });
+  it('jogador ainda recebe cell_occupied por token visível', () => {
+    expect(err(base(), { type: 'moveToken', tokenId: 't1', to: { col: 2, row: 1 } }, P1)).toBe('cell_occupied');
+  });
   it('jogador movendo token de outro PJ → not_your_token', () => {
     expect(err(base(), { type: 'moveToken', tokenId: 't2', to: { col: 3, row: 3 } }, P1)).toBe('not_your_token');
   });
@@ -105,6 +116,10 @@ describe('personagens', () => {
     ]);
     expect(err(base(), { type: 'updateCharacter', characterId: 'p1', patch: { name: ' ' } })).toBe('invalid_value');
     expect(err(base(), { type: 'updateCharacter', characterId: 'zz', patch: {} })).toBe('not_found');
+  });
+  it('updateCharacter: trocar o kind → invalid_value; mesmo kind passa', () => {
+    expect(err(base(), { type: 'updateCharacter', characterId: 'p1', patch: { kind: 'npc' } })).toBe('invalid_value');
+    expect(err(base(), { type: 'updateCharacter', characterId: 'p1', patch: { kind: 'pc' } })).toBe('ok');
   });
   it('deleteCharacter emite tokenRemoved por token e depois characterDeleted', () => {
     expect(evs(base(), { type: 'deleteCharacter', characterId: 'p1' })).toEqual([

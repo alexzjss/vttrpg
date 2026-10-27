@@ -14,10 +14,14 @@ export interface HandleOutput { result: CommandResult; updates: AudienceUpdate[]
 export class Authority {
   private state: CampaignState;
   private readonly newId: () => Id;
+  private readonly initialRevision: number;
+  /** Última revisão entregue (snapshot ou update) a cada audiência. */
+  private readonly lastDelivered = new Map<string, number>();
 
   constructor(state: CampaignState, deps: { newId: () => Id }) {
     this.state = state;
     this.newId = deps.newId;
+    this.initialRevision = state.revision;
   }
 
   getState(): CampaignState {
@@ -25,6 +29,7 @@ export class Authority {
   }
 
   snapshotFor(audience: Audience): ProjectedState {
+    this.lastDelivered.set(audienceKey(audience), this.state.revision);
     return project(this.state, audience);
   }
 
@@ -45,7 +50,10 @@ export class Authority {
       const changes = diffProjection(project(before, audience), projectedAfter);
       const cues = cuesFor(decision.events, before, projectedAfter);
       if (changes.length === 0 && cues.length === 0) continue;
-      updates.push({ audience, update: { revision: after.revision, changes, cues } });
+      const key = audienceKey(audience);
+      const baseRevision = this.lastDelivered.get(key) ?? this.initialRevision;
+      this.lastDelivered.set(key, after.revision);
+      updates.push({ audience, update: { revision: after.revision, baseRevision, changes, cues } });
     }
     return { result: { ok: true, revision: after.revision }, updates };
   }

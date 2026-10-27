@@ -20,9 +20,9 @@ const inBounds = (state: CampaignState, c: Cell) =>
   Number.isInteger(c.col) && Number.isInteger(c.row) &&
   c.col >= 0 && c.col < state.scene.grid.cols && c.row >= 0 && c.row < state.scene.grid.rows;
 
-const occupied = (state: CampaignState, c: Cell, exceptTokenId?: Id) =>
+const occupied = (state: CampaignState, c: Cell, exceptTokenId?: Id, ignoreHidden = false) =>
   Object.values(state.scene.tokens).some(
-    (t) => t.id !== exceptTokenId && t.cell.col === c.col && t.cell.row === c.row,
+    (t) => t.id !== exceptTokenId && !(ignoreHidden && t.hidden) && t.cell.col === c.col && t.cell.row === c.row,
   );
 
 const currentTokenId = (state: CampaignState): Id | undefined =>
@@ -38,7 +38,9 @@ const handlers: Handlers = {
   },
 
   updateCharacter(state, cmd) {
-    if (!state.characters[cmd.characterId]) return fail('not_found');
+    const current = state.characters[cmd.characterId];
+    if (!current) return fail('not_found');
+    if (cmd.patch.kind !== undefined && cmd.patch.kind !== current.kind) return fail('invalid_value');
     if (cmd.patch.name !== undefined && cmd.patch.name.trim() === '') return fail('invalid_value');
     const patch = Object.fromEntries(
       Object.entries(cmd.patch).filter(([, v]) => v !== undefined),
@@ -91,7 +93,8 @@ const handlers: Handlers = {
     }
     if (!inBounds(state, cmd.to)) return fail('out_of_bounds');
     if (token.cell.col === cmd.to.col && token.cell.row === cmd.to.row) return ok([]);
-    if (occupied(state, cmd.to, token.id)) return fail('cell_occupied');
+    // Jogador não enxerga tokens ocultos: ignorá-los evita vazar sua posição por cell_occupied.
+    if (occupied(state, cmd.to, token.id, ctx.actor.role === 'player')) return fail('cell_occupied');
     return ok([{ type: 'tokenMoved', tokenId: token.id, from: token.cell, to: cmd.to }]);
   },
 

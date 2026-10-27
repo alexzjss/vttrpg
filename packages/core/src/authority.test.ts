@@ -56,6 +56,26 @@ describe('Authority', () => {
     expect(second.result).toEqual({ ok: false, error: 'cell_occupied' });
   });
 
+  it('baseRevision é a última revisão entregue à audiência; ocultas não avançam', () => {
+    const a = make();
+    a.handle(GM, { type: 'createCharacter', input: mkChar('pc', 'Ana', 'exact') }); // rev 1
+    a.handle(GM, { type: 'createCharacter', input: mkChar('npc', 'Orc', 'hidden') }); // rev 2
+    const player: Audience = { kind: 'player', characterId: 'id1' };
+    expect(a.snapshotFor(player).revision).toBe(2);
+    const hiddenOnly = a.handle(GM, { type: 'setResource', characterId: 'id2', resource: 'hp', current: 3 }); // rev 3
+    expect(keys(hiddenOnly.updates)).toEqual(['gm']);
+    const gmU = hiddenOnly.updates[0]!.update;
+    expect(gmU.baseRevision).toBe(2);
+    const visible = a.handle(GM, { type: 'setResource', characterId: 'id1', resource: 'hp', current: 4 }); // rev 4
+    const p = visible.updates.find((u) => audienceKey(u.audience) === 'player:id1')!.update;
+    expect(p.revision).toBe(4);
+    expect(p.baseRevision).toBe(2); // pulou a 3, invisível a ele
+    const g = visible.updates.find((u) => audienceKey(u.audience) === 'gm')!.update;
+    expect(g.baseRevision).toBe(3);
+    const next = a.handle(GM, { type: 'setResource', characterId: 'id1', resource: 'hp', current: 5 });
+    expect(next.updates.find((u) => audienceKey(u.audience) === 'player:id1')!.update.baseRevision).toBe(4);
+  });
+
   it('comando ok sem eventos não muda a revisão nem gera updates', () => {
     const a = make();
     a.handle(GM, { type: 'createCharacter', input: mkChar('pc', 'Ana', 'exact') });
