@@ -46,6 +46,6 @@ describe('rotas', () => {
     const lia = Object.values(t.authority.getState().characters)[0]!;
     setSession({ role: 'player', characterId: lia.id });
     renderAt('/', () => t);
-    expect(await screen.findByRole('heading', { name: 'Jogador' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Lia' })).toBeTruthy();
   });
 });
