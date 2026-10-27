@@ -65,14 +65,14 @@ export function createGameStore() {
     function onUpdate(t: Transport, u: ProjectedUpdate) {
       const { state } = get();
       if (!state || resyncing) return;
-      if (u.revision <= state.revision) return; // já refletido (ex.: snapshot mais novo)
-      if (u.baseRevision !== state.revision) {
+      if (u.seq <= state.seq) return; // já refletido (ex.: snapshot mais novo)
+      if (u.seq !== state.seq + 1) {
         void resync(t); // lacuna real: descarta os cues do update e refaz o estado
         return;
       }
       const cues = [...get().cues, ...u.cues.map((cue) => ({ id: ++cueId, cue }))];
       set({
-        state: applyChanges(state, u.changes, u.revision),
+        state: applyChanges(state, u.changes, u.seq),
         cues: cues.length > MAX_CUES ? cues.slice(cues.length - MAX_CUES) : cues,
       });
     }

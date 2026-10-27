@@ -170,7 +170,7 @@ describe('propriedade: applyChanges(diff) == project', () => {
           const s2 = states[k + 1]!;
           const p = project(s, a);
           const p2 = project(s2, a);
-          expect(applyChanges(p, diffProjection(p, p2), s2.revision)).toEqual(p2);
+          expect(applyChanges(p, diffProjection(p, p2), p2.seq)).toEqual(p2);
         }
       }
       // também do estado inicial até o final
@@ -178,8 +178,18 @@ describe('propriedade: applyChanges(diff) == project', () => {
         const p = project(states[setup.length]!, a);
         const last = states[states.length - 1]!;
         const p2 = project(last, a);
-        expect(applyChanges(p, diffProjection(p, p2), last.revision)).toEqual(p2);
+        expect(applyChanges(p, diffProjection(p, p2), p2.seq)).toEqual(p2);
       }
     });
+  });
+});
+
+describe('projection seq', () => {
+  it('projection exposes audience seq, not global revision', () => {
+    const s: CampaignState = { ...world(), revision: 7, audienceSeq: { 'player:p1': 3 } };
+    const p = project(s, P1);
+    expect(p.seq).toBe(3);
+    expect('revision' in p).toBe(false);
+    expect(project(s, GM).seq).toBe(0);
   });
 });

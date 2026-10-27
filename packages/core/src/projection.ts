@@ -13,7 +13,7 @@ export interface ProjectedEncounter {
   active: boolean; round: number; order: InitiativeEntry[]; currentTokenId: Id | null;
 }
 export interface ProjectedState {
-  audience: Audience; campaignId: Id; name: string; revision: number;
+  audience: Audience; campaignId: Id; name: string; seq: number;
   characters: Record<Id, ProjectedCharacter>; scene: Scene; encounter: ProjectedEncounter;
 }
 
@@ -68,7 +68,7 @@ export function project(state: CampaignState, audience: Audience): ProjectedStat
     audience: clone(audience),
     campaignId: state.campaignId,
     name: state.name,
-    revision: state.revision,
+    seq: state.audienceSeq[audienceKey(audience)] ?? 0,
     characters,
     scene: { ...clone({ ...state.scene, tokens: {} }), tokens },
     encounter: { active: enc.active, round: enc.round, order: clone(order), currentTokenId },

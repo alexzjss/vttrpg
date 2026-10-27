@@ -13,6 +13,7 @@ export function createCampaign(campaignId: Id, name: string): CampaignState {
     campaignId,
     name,
     revision: 0,
+    audienceSeq: {},
     characters: {},
     scene: {
       id: 'scene-1',

@@ -36,6 +36,15 @@ describe('localTransport: desconexão', () => {
     t.close();
   });
 
+  it('pagehide com persisted (bfcache) não envia disconnect', () => {
+    const t = createLocalTransport();
+    const ev = new Event('pagehide') as Event & { persisted?: boolean };
+    Object.defineProperty(ev, 'persisted', { value: true });
+    window.dispatchEvent(ev);
+    expect(port.sent).toEqual([]);
+    t.close();
+  });
+
   it('erro load_failed rejeita connect e comandos pendentes', async () => {
     const t = createLocalTransport();
     const conn = t.connect({ role: 'gm' });

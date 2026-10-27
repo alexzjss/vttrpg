@@ -40,6 +40,6 @@ describe('diffProjection', () => {
     const r = applyChanges(p, [{ kind: 'setScene', scene: { ...p.scene, name: 'X' } }], 5);
     expect(r.scene.tokens.t1).toBeDefined();
     expect(r.scene.name).toBe('X');
-    expect(r.revision).toBe(5);
+    expect(r.seq).toBe(5);
   });
 });

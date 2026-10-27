@@ -17,6 +17,8 @@ export interface InitiativeEntry { tokenId: Id; initiative: number }
 export interface Encounter { active: boolean; round: number; turnIndex: number; order: InitiativeEntry[] }
 export interface CampaignState {
   campaignId: Id; name: string; revision: number;
+  /** Última sequência entregue a cada audiência (chave = audienceKey); ausente = 0. */
+  audienceSeq: Record<string, number>;
   characters: Record<Id, Character>; scene: Scene; encounter: Encounter;
 }
 export type Actor = { role: 'gm' } | { role: 'player'; characterId: Id };

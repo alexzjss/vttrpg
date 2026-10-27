@@ -26,6 +26,7 @@ const isNum = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
 /** Confere o formato mínimo de uma campanha salva; dado inválido nunca deve virar Authority. */
 export function isValidCampaign(v: unknown): v is CampaignState {
   if (!isObject(v) || !isNum(v.revision) || !isObject(v.characters)) return false;
+  if (v.audienceSeq !== undefined && !isObject(v.audienceSeq)) return false;
   if (!isObject(v.scene) || !isObject(v.scene.grid) || !isObject(v.scene.tokens)) return false;
   const g = v.scene.grid;
   if (!isNum(g.cols) || !isNum(g.rows) || !isNum(g.cellSize)) return false;
@@ -44,7 +45,7 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
     .load()
     .then((saved) => {
       if (saved === undefined) authority = new Authority(newCampaign(), { newId });
-      else if (isValidCampaign(saved)) authority = new Authority(saved, { newId });
+      else if (isValidCampaign(saved)) authority = new Authority({ ...saved, audienceSeq: saved.audienceSeq ?? {} }, { newId });
       else {
         console.error('[workerHost] campanha salva com formato inválido');
         failed = true;

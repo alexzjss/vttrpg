@@ -7,6 +7,7 @@ describe('createCampaign', () => {
       campaignId: 'c1',
       name: 'X',
       revision: 0,
+      audienceSeq: {},
       characters: {},
       scene: {
         id: 'scene-1',

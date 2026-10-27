@@ -32,7 +32,17 @@ describe('workerHost', () => {
     const gm = mkPort();
     gm.send({ t: 'connect', reqId: 1, session: GM });
     await flush();
-    expect(gm.msgs[0]).toMatchObject({ t: 'snapshot', state: { name: 'Campanha local', revision: 0 } });
+    expect(gm.msgs[0]).toMatchObject({ t: 'snapshot', state: { name: 'Campanha local', seq: 0 } });
+  });
+
+  it('estado salvo sem audienceSeq (Fase 1) é aceito e começa em seq 0', async () => {
+    const { audienceSeq: _a, ...legacy } = createCampaign('local', 'Antiga');
+    const store = { load: vi.fn(async () => legacy as unknown as CampaignState), save: vi.fn(async (_s: CampaignState) => {}) };
+    const msgs: WorkerMessage[] = [];
+    const send = createWorkerHost(store).attach({ postMessage: (m) => msgs.push(m) });
+    send({ t: 'connect', reqId: 1, session: GM });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(msgs[0]).toMatchObject({ t: 'snapshot', state: { name: 'Antiga', seq: 0 } });
   });
 
   it('comando do gm gera result para quem enviou e update só para a audiência afetada', async () => {
@@ -92,7 +102,7 @@ describe('workerHost', () => {
     gm.msgs.length = 0;
     gm.send({ t: 'reset' });
     await flush();
-    expect(gm.msgs[0]).toMatchObject({ t: 'snapshot', state: { revision: 0, characters: {} } });
+    expect(gm.msgs[0]).toMatchObject({ t: 'snapshot', state: { seq: 0, characters: {} } });
   });
 
   describe('falha ao carregar', () => {
@@ -145,7 +155,7 @@ describe('workerHost', () => {
       send({ t: 'connect', reqId: 3, session: GM });
       await wait();
       expect(store.save).toHaveBeenCalledTimes(1);
-      expect(msgs[msgs.length - 1]).toMatchObject({ t: 'snapshot', reqId: 3, state: { revision: 0 } });
+      expect(msgs[msgs.length - 1]).toMatchObject({ t: 'snapshot', reqId: 3, state: { seq: 0 } });
       err.mockRestore();
     });
   });
@@ -201,7 +211,7 @@ describe('workerHost', () => {
     }
     await new Promise((r) => setTimeout(r, 80));
     for (const port of [a, b]) {
-      const revs = port.msgs.flatMap((m) => (m.t === 'update' ? [m.update.revision] : []));
+      const revs = port.msgs.flatMap((m) => (m.t === 'update' ? [m.update.seq] : []));
       expect(revs).toEqual([1, 2, 3, 4, 5, 6]);
     }
   });
@@ -228,12 +238,17 @@ describe('workerHost', () => {
 });
 
 describe('isValidCampaign', () => {
+  it('aceita estado salvo sem audienceSeq (Fase 1)', () => {
+    const { audienceSeq: _a, ...legacy } = createCampaign('c', 'C');
+    expect(isValidCampaign(legacy)).toBe(true);
+  });
+
   it('aceita uma campanha real e rejeita formatos quebrados', () => {
     const ok = createCampaign('c', 'C');
     expect(isValidCampaign(ok)).toBe(true);
     expect(isValidCampaign(JSON.parse(JSON.stringify(ok)))).toBe(true);
     for (const bad of [
-      null, 1, 'x', [], {}, { ...ok, revision: '1' }, { ...ok, characters: null },
+      null, 1, 'x', [], {}, { ...ok, revision: '1' }, { ...ok, characters: null }, { ...ok, audienceSeq: 'x' },
       { ...ok, scene: { ...ok.scene, grid: { cols: 1, rows: 1 } } }, { ...ok, scene: undefined },
       { ...ok, scene: { ...ok.scene, tokens: undefined } }, { ...ok, encounter: undefined },
     ]) expect(isValidCampaign(bad)).toBe(false);

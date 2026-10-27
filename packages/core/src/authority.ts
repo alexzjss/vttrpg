@@ -14,14 +14,10 @@ export interface HandleOutput { result: CommandResult; updates: AudienceUpdate[]
 export class Authority {
   private state: CampaignState;
   private readonly newId: () => Id;
-  private readonly initialRevision: number;
-  /** Última revisão entregue (snapshot ou update) a cada audiência. */
-  private readonly lastDelivered = new Map<string, number>();
 
   constructor(state: CampaignState, deps: { newId: () => Id }) {
     this.state = state;
     this.newId = deps.newId;
-    this.initialRevision = state.revision;
   }
 
   getState(): CampaignState {
@@ -29,7 +25,6 @@ export class Authority {
   }
 
   snapshotFor(audience: Audience): ProjectedState {
-    this.lastDelivered.set(audienceKey(audience), this.state.revision);
     return project(this.state, audience);
   }
 
@@ -42,19 +37,20 @@ export class Authority {
 
     const before = this.state;
     const after: CampaignState = { ...applyEvents(before, decision.events), revision: before.revision + 1 };
-    this.state = after;
 
     const updates: AudienceUpdate[] = [];
+    const audienceSeq = { ...before.audienceSeq };
     for (const audience of knownAudiences(before, after)) {
       const projectedAfter = project(after, audience);
       const changes = diffProjection(project(before, audience), projectedAfter);
       const cues = cuesFor(decision.events, before, projectedAfter);
       if (changes.length === 0 && cues.length === 0) continue;
       const key = audienceKey(audience);
-      const baseRevision = this.lastDelivered.get(key) ?? this.initialRevision;
-      this.lastDelivered.set(key, after.revision);
-      updates.push({ audience, update: { revision: after.revision, baseRevision, changes, cues } });
+      const seq = (audienceSeq[key] ?? 0) + 1;
+      audienceSeq[key] = seq;
+      updates.push({ audience, update: { seq, changes, cues } });
     }
+    this.state = { ...after, audienceSeq };
     return { result: { ok: true, revision: after.revision }, updates };
   }
 }
