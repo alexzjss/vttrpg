@@ -4,6 +4,7 @@ export * from './events';
 export * from './reducer';
 export * from './campaign';
 export * from './commands';
+export * from './account';
 export * from './decide';
 export * from './initiative';
 export * from './projection';

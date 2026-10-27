@@ -1,4 +1,8 @@
 import type { IncomingMessage } from 'node:http';
+import type { AuthAdmin } from './authAdmin';
+import type { IdentifyFn } from './auth';
+import type { AccountsRepo, CampaignsRepo } from './repos';
+import type { CampaignStore } from './store';
 
 export interface ApiRequest {
   method: string;
@@ -19,9 +23,14 @@ export interface ServerEnv {
   SETUP_TOKEN?: string;
 }
 
-/** Dependências injetadas nos handlers; as próximas tasks acrescentam campos. */
+/** Dependências injetadas nos handlers. */
 export interface ServerDeps {
   env: ServerEnv;
+  store: CampaignStore;
+  identify: IdentifyFn;
+  admin: AuthAdmin;
+  db: AccountsRepo & CampaignsRepo;
+  newId: () => string;
 }
 
 export type Handler = (req: ApiRequest, deps: ServerDeps) => Promise<ApiResponse>;

@@ -3,12 +3,13 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CORE_VERSION } from '@vtt/core';
 import { MAX_BODY_BYTES, type ServerEnv } from './http';
+import { createDeps } from './deps';
 import { toNodeHandler } from './nodeAdapter';
 
 let server: Server | undefined;
 
 async function start(env: ServerEnv = {}): Promise<string> {
-  const s = createServer(toNodeHandler(() => ({ env })));
+  const s = createServer(toNodeHandler(() => createDeps(env)));
   server = s;
   await new Promise<void>((resolve) => s.listen(0, '127.0.0.1', resolve));
   return `http://127.0.0.1:${(s.address() as AddressInfo).port}`;

@@ -28,3 +28,10 @@ export type ErrorCode =
   | 'tokens_out_of_bounds'
   | 'invalid_order'
   | 'conflict';
+
+/** Todos os valores válidos de `Command['type']`; o servidor valida o corpo contra esta lista. */
+export const COMMAND_TYPES: readonly Command['type'][] = [
+  'createCharacter', 'updateCharacter', 'deleteCharacter', 'setResource',
+  'placeToken', 'moveToken', 'removeToken', 'setTokenHidden',
+  'updateGrid', 'startEncounter', 'nextTurn', 'reorderInitiative', 'endEncounter',
+];
