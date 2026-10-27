@@ -1,6 +1,7 @@
 import type { Command, ErrorCode } from './commands';
 import { cuesFor } from './cues';
 import { decide } from './decide';
+import type { GameEvent } from './events';
 import { diffProjection, type ProjectedUpdate } from './diff';
 import type { Actor, CampaignState, Id } from './model';
 import { audienceKey, project, type Audience, type ProjectedState } from './projection';
@@ -8,7 +9,7 @@ import { applyEvents } from './reducer';
 
 export type CommandResult = { ok: true; revision: number } | { ok: false; error: ErrorCode };
 export interface AudienceUpdate { audience: Audience; update: ProjectedUpdate }
-export interface HandleOutput { result: CommandResult; updates: AudienceUpdate[] }
+export interface HandleOutput { result: CommandResult; updates: AudienceUpdate[]; events: GameEvent[] }
 
 /** Autoridade síncrona: um comando por vez; produz updates projetados por audiência. */
 export class Authority {
@@ -30,9 +31,9 @@ export class Authority {
 
   handle(actor: Actor, cmd: Command): HandleOutput {
     const decision = decide(this.state, cmd, { actor, newId: this.newId });
-    if (!decision.ok) return { result: { ok: false, error: decision.error }, updates: [] };
+    if (!decision.ok) return { result: { ok: false, error: decision.error }, updates: [], events: [] };
     if (decision.events.length === 0) {
-      return { result: { ok: true, revision: this.state.revision }, updates: [] };
+      return { result: { ok: true, revision: this.state.revision }, updates: [], events: [] };
     }
 
     const before = this.state;
@@ -51,7 +52,7 @@ export class Authority {
       updates.push({ audience, update: { seq, changes, cues } });
     }
     this.state = { ...after, audienceSeq };
-    return { result: { ok: true, revision: after.revision }, updates };
+    return { result: { ok: true, revision: after.revision }, updates, events: decision.events };
   }
 }
 

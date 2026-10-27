@@ -26,4 +26,5 @@ export type ErrorCode =
   | 'no_encounter'
   | 'encounter_active'
   | 'tokens_out_of_bounds'
-  | 'invalid_order';
+  | 'invalid_order'
+  | 'conflict';
