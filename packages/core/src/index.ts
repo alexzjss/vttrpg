@@ -6,3 +6,6 @@ export * from './campaign';
 export * from './commands';
 export * from './decide';
 export * from './initiative';
+export * from './projection';
+export * from './diff';
+export * from './cues';
