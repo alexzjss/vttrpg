@@ -9,3 +9,4 @@ export * from './initiative';
 export * from './projection';
 export * from './diff';
 export * from './cues';
+export * from './authority';
