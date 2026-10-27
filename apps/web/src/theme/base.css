@@ -36,7 +36,7 @@ button:hover {
   background: var(--color-accent, #b3263a);
 }
 
-main {
+.login-page {
   padding: 1rem;
   max-width: 40rem;
   margin: 0 auto;

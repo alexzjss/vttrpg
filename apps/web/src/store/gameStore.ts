@@ -16,25 +16,36 @@ interface GameStore {
   cues: Array<{ id: number; cue: Cue }>;
   lastError: ErrorCode | null;
   connect(t: Transport, s: Session): Promise<void>;
+  /** Solta assinaturas e zera o estado. Não fecha o transporte: quem o criou é dono dele. */
+  disconnect(): void;
   send(cmd: Command): Promise<CommandResult>; // grava lastError se falhar
   takeCues(): Cue[]; // devolve e limpa a fila
 }
 
 export function createGameStore() {
-  let transport: Transport | null = null;
+  // Única conexão vigente. Um connect/resync/send de transporte superado é descartado.
+  let currentTransport: Transport | null = null;
   let unsubscribe: (() => void) | null = null;
   let unsubscribeSnapshot: (() => void) | null = null;
   let resyncing = false;
   let cueId = 0;
+
+  const dropSubscriptions = () => {
+    unsubscribe?.();
+    unsubscribeSnapshot?.();
+    unsubscribe = null;
+    unsubscribeSnapshot = null;
+  };
 
   return create<GameStore>((set, get) => {
     async function resync(t: Transport) {
       if (resyncing) return;
       resyncing = true;
       try {
-        set({ state: await t.resync() });
+        const state = await t.resync();
+        if (currentTransport === t) set({ state });
       } catch {
-        set({ status: 'error' });
+        if (currentTransport === t) set({ status: 'error' });
       } finally {
         resyncing = false;
       }
@@ -59,29 +70,39 @@ export function createGameStore() {
       cues: [],
       lastError: null,
       async connect(t, s) {
-        unsubscribe?.();
-        unsubscribeSnapshot?.();
-        transport = t;
+        dropSubscriptions();
+        currentTransport = t;
         set({ status: 'connecting', lastError: null });
+        let state: ProjectedState;
         try {
-          const state = await t.connect(s);
-          unsubscribe = t.onUpdate((u) => onUpdate(t, u));
-          unsubscribeSnapshot = t.onSnapshot((snap) => set({ state: snap, cues: [] }));
-          set({ state, status: 'ready' });
+          state = await t.connect(s);
         } catch {
-          set({ status: 'error' });
+          if (currentTransport === t) set({ status: 'error' });
+          return;
         }
+        if (currentTransport !== t) return; // superado por outro connect ou disconnect
+        unsubscribe = t.onUpdate((u) => onUpdate(t, u));
+        unsubscribeSnapshot = t.onSnapshot((snap) => {
+          if (currentTransport === t) set({ state: snap, cues: [] });
+        });
+        set({ state, status: 'ready' });
+      },
+      disconnect() {
+        dropSubscriptions();
+        currentTransport = null;
+        set({ status: 'idle', state: null, cues: [], lastError: null });
       },
       async send(cmd) {
-        if (!transport) return { ok: false, error: 'not_found' };
+        const t = currentTransport;
+        if (!t) return { ok: false, error: 'not_found' };
         let result: CommandResult;
         try {
-          result = await transport.send(cmd);
+          result = await t.send(cmd);
         } catch (e) {
-          set({ status: 'error' });
+          if (currentTransport === t) set({ status: 'error' });
           throw e;
         }
-        if (!result.ok) set({ lastError: result.error });
+        if (currentTransport === t && !result.ok) set({ lastError: result.error });
         return result;
       },
       takeCues() {

@@ -20,18 +20,28 @@ export function getSession(): Session | null {
   }
 }
 
-export function setSession(s: Session): void {
-  sessionStorage.setItem(KEY, JSON.stringify(s));
+/** Devolve false se o navegador não deixou gravar (storage bloqueado ou cheio). */
+export function setSession(s: Session): boolean {
+  try {
+    sessionStorage.setItem(KEY, JSON.stringify(s));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function clearSession(): void {
-  sessionStorage.removeItem(KEY);
+  try {
+    sessionStorage.removeItem(KEY);
+  } catch {
+    // storage indisponível: nada a limpar
+  }
 }
 
 /**
  * Abre a mesa em nova aba sem noopener: o navegador copia o sessionStorage
  * para a aba nova (um link target=_blank comum não copia).
  */
-export function abrirMesa(): void {
+export function openTableWindow(): void {
   window.open('/mesa', '_blank');
 }

@@ -11,8 +11,9 @@ type Pc = [id: string, name: string];
 
 export function LoginPage({ transportFactory = createTransport }: Props) {
   const navigate = useNavigate();
-  const [pcs, setPcs] = useState<Pc[] | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+  const [characters, setCharacters] = useState<Pc[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,12 +24,12 @@ export function LoginPage({ transportFactory = createTransport }: Props) {
       try {
         transport = transportFactory();
         const state = await transport.connect({ role: 'gm' });
-        const lista: Pc[] = Object.entries(state.characters)
+        const list: Pc[] = Object.entries(state.characters)
           .filter(([, c]) => c.kind === 'pc')
           .map(([id, c]) => [id, c.name]);
-        if (!cancelled) setPcs(lista);
+        if (!cancelled) setCharacters(list);
       } catch {
-        if (!cancelled) setErro('Não foi possível carregar os personagens.');
+        if (!cancelled) setError('Não foi possível carregar os personagens.');
       } finally {
         transport?.close();
       }
@@ -38,35 +39,36 @@ export function LoginPage({ transportFactory = createTransport }: Props) {
     };
   }, [transportFactory]);
 
-  const entrarMestre = () => {
-    setSession({ role: 'gm' });
+  const enterAsGm = () => {
+    if (!setSession({ role: 'gm' })) return setSaveFailed(true);
     navigate('/mestre');
   };
 
-  const entrarJogador = (characterId: string) => {
-    setSession({ role: 'player', characterId });
+  const enterAsPlayer = (characterId: string) => {
+    if (!setSession({ role: 'player', characterId })) return setSaveFailed(true);
     navigate('/jogador');
   };
 
   return (
-    <main>
+    <main className="login-page">
       <h1>VTT</h1>
       <p>Mesa virtual, modo local.</p>
+      {saveFailed && <p role="alert">Não foi possível salvar a sessão neste navegador.</p>}
 
       <section>
         <h2>Mestre</h2>
-        <button type="button" onClick={entrarMestre}>
+        <button type="button" onClick={enterAsGm}>
           Entrar como Mestre
         </button>
       </section>
 
       <section>
         <h2>Entrar como jogador</h2>
-        {erro && <p role="alert">{erro}</p>}
-        {!erro && pcs === null && <p>Carregando personagens…</p>}
-        {pcs?.length === 0 && <p>Nenhum personagem jogador criado ainda.</p>}
-        {pcs?.map(([id, name]) => (
-          <button key={id} type="button" onClick={() => entrarJogador(id)}>
+        {error && <p role="alert">{error}</p>}
+        {!error && characters === null && <p>Carregando personagens…</p>}
+        {characters?.length === 0 && <p>Nenhum personagem jogador criado ainda.</p>}
+        {characters?.map(([id, name]) => (
+          <button key={id} type="button" onClick={() => enterAsPlayer(id)}>
             {name}
           </button>
         ))}
