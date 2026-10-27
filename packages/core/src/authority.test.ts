@@ -3,7 +3,8 @@ import { Authority, type AudienceUpdate } from './authority';
 import { createCampaign, defaultResources } from './campaign';
 import type { Command } from './commands';
 import type { Actor, Character, Id } from './model';
-import { audienceKey, type Audience } from './projection';
+import { applyChanges } from './diff';
+import { audienceKey, type Audience, type ProjectedState } from './projection';
 
 const GM: Actor = { role: 'gm' };
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 5 };
@@ -119,20 +120,45 @@ describe('Authority: varredura de vazamento', () => {
       }
     };
 
+    // Espelho do cliente: parte do snapshot inicial e aplica só os updates recebidos.
+    let mirror: ProjectedState = a.snapshotFor(player);
+
     const run = (cmd: Command) => {
-      const known = knownIds(); // o cliente já conhecia estes ids; removê-los é legítimo
+      const known = knownIds(); // o que o cliente já conhecia
       const out = a.handle(GM, cmd);
       expect(out.result.ok).toBe(true);
-      const forbidden = forbiddenNow().filter((id) => !known.has(id));
-      for (const u of out.updates) {
-        if (u.audience.kind !== 'player') continue;
-        assertNoLeak(JSON.stringify(u), forbidden);
+      const forbidden = forbiddenNow();
+      const state = a.getState();
+      const playerUpdates = out.updates.filter((u) => u.audience.kind === 'player');
+      for (const u of playerUpdates) {
+        // ids já conhecidos só podem aparecer dentro de removeToken/removeCharacter
+        const rest = {
+          ...u,
+          update: {
+            ...u.update,
+            changes: u.update.changes.filter((c) => c.kind !== 'removeToken' && c.kind !== 'removeCharacter'),
+          },
+        };
+        assertNoLeak(JSON.stringify(rest), forbidden);
         for (const ch of u.update.changes) {
+          if (ch.kind === 'removeToken') expect(forbidden.includes(ch.id) || !state.scene.tokens[ch.id]).toBe(true);
           if (ch.kind !== 'upsertCharacter') continue;
-          const real = a.getState().characters[ch.character.id]!;
+          const real = state.characters[ch.character.id]!;
           if (real.kind === 'npc' && real.hpVisibility !== 'exact') expect(ch.character.resources).toBeNull();
         }
       }
+      // ids que o cliente conhecia e agora estão ocultos: a remoção tem de ser emitida
+      const changes = playerUpdates.flatMap((u) => u.update.changes);
+      for (const id of forbidden.filter((x) => known.has(x))) {
+        const kind = state.scene.tokens[id] ? 'removeToken' : 'removeCharacter';
+        expect(changes, `faltou ${kind} de ${id}`).toContainEqual({ kind, id });
+      }
+      // espelho do cliente == snapshot (revisão avança mesmo sem update para a audiência)
+      const mine = playerUpdates[0]?.update;
+      mirror = mine
+        ? applyChanges(mirror, mine.changes, mine.revision)
+        : { ...mirror, revision: state.revision };
+      expect(mirror).toEqual(a.snapshotFor(player));
       assertSnapshotClean();
       return out;
     };
