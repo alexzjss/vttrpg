@@ -9,3 +9,5 @@ dist/
 Criar atalho na Area de Trabalho.ps1
 vat_backup_2026-07-05_14-18.json
 Abrir RPG Codex.cmd
+legacy/node_modules
+**/dist

@@ -1,0 +1,43 @@
+:root {
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--color-bg, #120c0e);
+  color: var(--color-text, #f3ecdd);
+  font-family: var(--font-body, system-ui, sans-serif);
+}
+
+h1,
+h2 {
+  font-family: var(--font-display, Georgia, serif);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--color-surface-alt, #2a1d22);
+  border: 1px solid var(--color-accent, #b3263a);
+  border-radius: 4px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--color-accent, #b3263a);
+}
+
+.login-page {
+  padding: 1rem;
+  max-width: 40rem;
+  margin: 0 auto;
+}

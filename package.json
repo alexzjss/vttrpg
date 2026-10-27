@@ -1,27 +1,15 @@
 {
-  "name": "rpg-master-organizer",
+  "name": "vttrpg",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest run --passWithNoTests"
-  },
-  "dependencies": {
-    "lucide-react": "^0.574.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
-  },
-  "devDependencies": {
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/react": "^16.3.2",
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "jsdom": "^25.0.1",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "vitest": "^2.1.9"
+    "dev": "npm run dev -w @vtt/web --",
+    "build": "npm run build -w @vtt/web",
+    "test": "npm run test --workspaces --if-present"
   }
 }

@@ -1,0 +1,242 @@
+.player-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow: hidden;
+}
+
+.player-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-grid);
+}
+
+.player-header h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.player-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.player-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+}
+
+.player-left,
+.player-right {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+.player-left {
+  display: flex;
+  justify-content: center;
+  border-right: 1px solid var(--color-grid);
+}
+
+.player-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--color-surface);
+}
+
+.player-missing {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.player-missing p {
+  color: var(--color-danger);
+  font-size: 1.1rem;
+}
+
+.character-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.sheet-art {
+  width: 100%;
+  height: calc(100vh - 9rem);
+  min-height: 12rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sheet-art img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.sheet-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+}
+
+/* Silhueta em CSS: cabeça e ombros em um bloco da cor do tema. */
+.silhouette {
+  position: relative;
+  background: var(--color-surface-alt);
+  border-radius: 6px;
+}
+
+.silhouette::before,
+.silhouette::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-grid);
+}
+
+.silhouette::before {
+  top: 14%;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+}
+
+.silhouette::after {
+  top: 52%;
+  width: 70%;
+  height: 46%;
+  border-radius: 50% 50% 6px 6px;
+}
+
+.sheet-silhouette {
+  width: min(60%, 320px);
+  height: 100%;
+}
+
+.resource-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.resource-bar-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.resource-bar-track {
+  height: 0.75rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-grid);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.resource-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.2s ease;
+}
+
+.turn-banner {
+  padding: 0.6rem 0.75rem;
+  background: var(--color-surface-alt);
+  border-left: 3px solid var(--color-grid);
+  border-radius: 4px;
+}
+
+.turn-banner.turn-mine {
+  border-left-color: var(--color-accent);
+}
+
+.turn-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.turn-round {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.allies-panel h3 {
+  margin: 0 0 0.4rem;
+}
+
+.ally-card {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-grid);
+}
+
+.ally-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.ally-portrait {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+
+.ally-portrait.silhouette::before {
+  top: 18%;
+  width: 36%;
+  height: 36%;
+}
+
+.ally-portrait.silhouette::after {
+  top: 58%;
+  width: 72%;
+  height: 40%;
+}
+
+@media (max-width: 800px) {
+  .player-page {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .player-body {
+    grid-template-columns: 1fr;
+  }
+
+  .player-left {
+    border-right: none;
+    border-bottom: 1px solid var(--color-grid);
+  }
+
+  .sheet-art {
+    height: auto;
+    aspect-ratio: 3 / 4;
+  }
+}
