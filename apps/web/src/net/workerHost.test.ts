@@ -30,7 +30,7 @@ describe('workerHost', () => {
   it('connect devolve snapshot da audiÃªncia', async () => {
     const { mkPort, flush } = setup();
     const gm = mkPort();
-    gm.send({ t: 'connect', session: GM });
+    gm.send({ t: 'connect', reqId: 1, session: GM });
     await flush();
     expect(gm.msgs[0]).toMatchObject({ t: 'snapshot', state: { name: 'Campanha local', revision: 0 } });
   });
@@ -40,11 +40,11 @@ describe('workerHost', () => {
     const gm = mkPort();
     const p1 = mkPort();
     const other = mkPort();
-    gm.send({ t: 'connect', session: GM });
+    gm.send({ t: 'connect', reqId: 1, session: GM });
     gm.send({ t: 'command', reqId: 1, cmd: { type: 'createCharacter', input: mkChar('pc', 'Ana') } });
     gm.send({ t: 'command', reqId: 2, cmd: { type: 'createCharacter', input: mkChar('pc', 'Bia') } });
-    p1.send({ t: 'connect', session: { role: 'player', characterId: 'id-1' } });
-    other.send({ t: 'connect', session: { role: 'player', characterId: 'id-2' } });
+    p1.send({ t: 'connect', reqId: 1, session: { role: 'player', characterId: 'id-1' } });
+    other.send({ t: 'connect', reqId: 1, session: { role: 'player', characterId: 'id-2' } });
     await flush();
     gm.msgs.length = 0; p1.msgs.length = 0; other.msgs.length = 0;
     gm.send({ t: 'command', reqId: 3, cmd: { type: 'setResource', characterId: 'id-1', resource: 'hp', current: 3 } });
@@ -59,10 +59,10 @@ describe('workerHost', () => {
     const { mkPort, flush } = setup();
     const gm = mkPort();
     const p1 = mkPort();
-    gm.send({ t: 'connect', session: GM });
+    gm.send({ t: 'connect', reqId: 1, session: GM });
     gm.send({ t: 'command', reqId: 1, cmd: { type: 'createCharacter', input: mkChar('pc', 'Ana') } });
     gm.send({ t: 'command', reqId: 2, cmd: { type: 'createCharacter', input: mkChar('npc', 'Orc') } });
-    p1.send({ t: 'connect', session: { role: 'player', characterId: 'id-1' } });
+    p1.send({ t: 'connect', reqId: 1, session: { role: 'player', characterId: 'id-1' } });
     await flush();
     p1.msgs.length = 0;
     gm.send({ t: 'command', reqId: 3, cmd: { type: 'setResource', characterId: 'id-2', resource: 'hp', current: 1 } });
@@ -73,7 +73,7 @@ describe('workerHost', () => {
   it('save apÃ³s comando aceito e nÃ£o apÃ³s rejeitado', async () => {
     const { store, mkPort, flush } = setup();
     const gm = mkPort();
-    gm.send({ t: 'connect', session: GM });
+    gm.send({ t: 'connect', reqId: 1, session: GM });
     gm.send({ t: 'command', reqId: 1, cmd: { type: 'deleteCharacter', characterId: 'x' } });
     await flush();
     expect(gm.msgs[1]).toMatchObject({ t: 'result', result: { ok: false } });
@@ -86,12 +86,66 @@ describe('workerHost', () => {
   it('reset recria a campanha e manda snapshot a todas as portas', async () => {
     const { mkPort, flush } = setup();
     const gm = mkPort();
-    gm.send({ t: 'connect', session: GM });
+    gm.send({ t: 'connect', reqId: 1, session: GM });
     gm.send({ t: 'command', reqId: 1, cmd: { type: 'createCharacter', input: mkChar('pc', 'Ana') } });
     await flush();
     gm.msgs.length = 0;
     gm.send({ t: 'reset' });
     await flush();
     expect(gm.msgs[0]).toMatchObject({ t: 'snapshot', state: { revision: 0, characters: {} } });
+  });
+
+  it('falha em load ainda responde ao connect com campanha nova', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const store = { load: async () => { throw new Error('idb'); }, save: async () => {} };
+    const host = createWorkerHost(store, { newId: () => 'x' });
+    const msgs: WorkerMessage[] = [];
+    host.attach({ postMessage: (m) => msgs.push(m) })({ t: 'connect', reqId: 7, session: GM });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(msgs[0]).toMatchObject({ t: 'snapshot', reqId: 7, state: { revision: 0 } });
+    err.mockRestore();
+  });
+
+  it('falha em save não bloqueia result e updates', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const store = { load: async () => undefined, save: async () => { throw new Error('idb'); } };
+    const host = createWorkerHost(store, { newId: () => 'x' });
+    const msgs: WorkerMessage[] = [];
+    const send = host.attach({ postMessage: (m) => msgs.push(m) });
+    send({ t: 'connect', reqId: 1, session: GM });
+    send({ t: 'command', reqId: 2, cmd: { type: 'createCharacter', input: mkChar('pc', 'Ana') } });
+    send({ t: 'command', reqId: 3, cmd: { type: 'createCharacter', input: mkChar('pc', 'Bia') } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(msgs.map((m) => m.t)).toEqual(['snapshot', 'result', 'update', 'result', 'update']);
+    err.mockRestore();
+  });
+
+  it('comandos de duas portas são processados em ordem, com revisões crescentes por porta', async () => {
+    const { mkPort, flush, store } = setup();
+    store.save.mockImplementation(() => new Promise((r) => setTimeout(r, 5)));
+    const a = mkPort();
+    const b = mkPort();
+    a.send({ t: 'connect', reqId: 1, session: GM });
+    b.send({ t: 'connect', reqId: 1, session: GM });
+    for (let i = 0; i < 3; i++) {
+      a.send({ t: 'command', reqId: 10 + i, cmd: { type: 'createCharacter', input: mkChar('pc', `A${i}`) } });
+      b.send({ t: 'command', reqId: 20 + i, cmd: { type: 'createCharacter', input: mkChar('pc', `B${i}`) } });
+    }
+    await new Promise((r) => setTimeout(r, 80));
+    for (const port of [a, b]) {
+      const revs = port.msgs.flatMap((m) => (m.t === 'update' ? [m.update.revision] : []));
+      expect(revs).toEqual([1, 2, 3, 4, 5, 6]);
+    }
+    void flush;
+  });
+
+  it('reset vai como snapshot sem reqId', async () => {
+    const { mkPort, flush } = setup();
+    const gm = mkPort();
+    gm.send({ t: 'connect', reqId: 1, session: GM });
+    gm.send({ t: 'reset' });
+    await flush();
+    expect(gm.msgs[1]).toMatchObject({ t: 'snapshot' });
+    expect((gm.msgs[1] as { reqId?: number }).reqId).toBeUndefined();
   });
 });

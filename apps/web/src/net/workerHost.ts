@@ -25,9 +25,23 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
   const ports = new Set<PortEntry>();
   let authority: Authority | null = null;
-  const ready = store.load().then((saved) => {
-    authority = new Authority(saved ?? newCampaign(), { newId });
-  });
+  const ready = store
+    .load()
+    .catch((e) => {
+      console.error('[workerHost] falha ao carregar a campanha; usando uma nova', e);
+      return undefined;
+    })
+    .then((saved) => {
+      authority = new Authority(saved ?? newCampaign(), { newId });
+    });
+
+  const persist = async (s: CampaignState) => {
+    try {
+      await store.save(s);
+    } catch (e) {
+      console.error('[workerHost] falha ao salvar a campanha', e);
+    }
+  };
 
   async function process(entry: PortEntry, msg: ClientMessage): Promise<void> {
     await ready;
@@ -36,18 +50,20 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
       case 'connect':
         entry.session = msg.session;
         entry.audience = actorAudience(msg.session);
-        entry.port.postMessage({ t: 'snapshot', state: auth.snapshotFor(entry.audience) });
+        entry.port.postMessage({ t: 'snapshot', state: auth.snapshotFor(entry.audience), reqId: msg.reqId });
         return;
       case 'resync':
-        if (entry.audience) entry.port.postMessage({ t: 'snapshot', state: auth.snapshotFor(entry.audience) });
+        if (entry.audience) {
+          entry.port.postMessage({ t: 'snapshot', state: auth.snapshotFor(entry.audience), reqId: msg.reqId });
+        }
         return;
       case 'reset': {
         const fresh = new Authority(newCampaign(), { newId });
         authority = fresh;
-        await store.save(fresh.getState());
         for (const p of ports) {
           if (p.audience) p.port.postMessage({ t: 'snapshot', state: fresh.snapshotFor(p.audience) });
         }
+        await persist(fresh.getState());
         return;
       }
       case 'command': {
@@ -55,8 +71,15 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
           entry.port.postMessage({ t: 'result', reqId: msg.reqId, result: { ok: false, error: 'not_found' } });
           return;
         }
-        const { result, updates } = auth.handle(entry.session, msg.cmd);
-        if (result.ok && updates.length > 0) await store.save(auth.getState());
+        let out: ReturnType<Authority['handle']>;
+        try {
+          out = auth.handle(entry.session, msg.cmd);
+        } catch (e) {
+          console.error('[workerHost] erro ao tratar comando', e);
+          entry.port.postMessage({ t: 'result', reqId: msg.reqId, result: { ok: false, error: 'invalid_value' } });
+          return;
+        }
+        const { result, updates } = out;
         entry.port.postMessage({ t: 'result', reqId: msg.reqId, result });
         for (const { audience, update } of updates) {
           const key = audienceKey(audience);
@@ -64,19 +87,22 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
             if (p.audience && audienceKey(p.audience) === key) p.port.postMessage({ t: 'update', update });
           }
         }
+        if (result.ok && updates.length > 0) await persist(auth.getState());
       }
     }
   }
+
+  // Uma única fila serial para todas as portas: ordem global dos comandos.
+  let chain: Promise<void> = Promise.resolve();
+  const enqueue = (entry: PortEntry, msg: ClientMessage) => {
+    chain = chain.then(() => process(entry, msg)).catch((e) => console.error('[workerHost] erro', e));
+  };
 
   return {
     attach(port: HostPort): (msg: ClientMessage) => void {
       const entry: PortEntry = { port, session: null, audience: null };
       ports.add(entry);
-      // Encadeia para preservar a ordem das mensagens de cada porta.
-      let chain: Promise<void> = Promise.resolve();
-      return (msg) => {
-        chain = chain.then(() => process(entry, msg)).catch(() => undefined);
-      };
+      return (msg) => enqueue(entry, msg);
     },
   };
 }

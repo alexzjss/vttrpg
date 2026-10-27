@@ -23,6 +23,7 @@ interface GameStore {
 export function createGameStore() {
   let transport: Transport | null = null;
   let unsubscribe: (() => void) | null = null;
+  let unsubscribeSnapshot: (() => void) | null = null;
   let resyncing = false;
   let cueId = 0;
 
@@ -32,6 +33,8 @@ export function createGameStore() {
       resyncing = true;
       try {
         set({ state: await t.resync() });
+      } catch {
+        set({ status: 'error' });
       } finally {
         resyncing = false;
       }
@@ -57,11 +60,13 @@ export function createGameStore() {
       lastError: null,
       async connect(t, s) {
         unsubscribe?.();
+        unsubscribeSnapshot?.();
         transport = t;
         set({ status: 'connecting', lastError: null });
         try {
           const state = await t.connect(s);
           unsubscribe = t.onUpdate((u) => onUpdate(t, u));
+          unsubscribeSnapshot = t.onSnapshot((snap) => set({ state: snap, cues: [] }));
           set({ state, status: 'ready' });
         } catch {
           set({ status: 'error' });
@@ -69,7 +74,13 @@ export function createGameStore() {
       },
       async send(cmd) {
         if (!transport) return { ok: false, error: 'not_found' };
-        const result = await transport.send(cmd);
+        let result: CommandResult;
+        try {
+          result = await transport.send(cmd);
+        } catch (e) {
+          set({ status: 'error' });
+          throw e;
+        }
         if (!result.ok) set({ lastError: result.error });
         return result;
       },
