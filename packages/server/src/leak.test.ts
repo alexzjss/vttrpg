@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createCampaign, defaultResources, type Actor, type Character, type Command } from '@vtt/core';
+import {
+  createCampaign, defaultResources, type Actor, type CampaignState, type Character, type Command, type ProjectedUpdate,
+} from '@vtt/core';
 import { processCommand } from './commands';
 import { MemoryStore } from './memoryStore';
 
@@ -9,6 +11,74 @@ const mkChar = (
   kind: 'pc' | 'npc', name: string, hpVisibility: Character['hpVisibility'],
 ): Omit<Character, 'id'> => ({ kind, name, hpVisibility, resources: defaultResources(), ...base });
 
+const hiddenIds = (state: CampaignState): string[] => {
+  const visible = new Set(
+    Object.values(state.scene.tokens).filter((t) => !t.hidden).map((t) => t.characterId),
+  );
+  return [
+    ...Object.values(state.scene.tokens).filter((t) => t.hidden).map((t) => t.id),
+    ...Object.values(state.characters).filter((c) => c.kind === 'npc' && !visible.has(c.id)).map((c) => c.id),
+  ];
+};
+
+/**
+ * Confere um broadcast de player. `known` = ids que esse tópico já recebeu por upsert;
+ * remoção só é legítima para id conhecido. Atualiza `known` ao final.
+ */
+function checkPlayerPayload(
+  payload: ProjectedUpdate, known: Set<string>, pre: CampaignState, post: CampaignState,
+): void {
+  const visibleNow = new Set([
+    ...Object.values(post.scene.tokens).filter((t) => !t.hidden).map((t) => t.id),
+    ...Object.values(post.scene.tokens).filter((t) => !t.hidden).map((t) => t.characterId),
+  ]);
+  const forbidden = [...new Set([...hiddenIds(pre), ...hiddenIds(post)])].filter((id) => !visibleNow.has(id));
+
+  for (const ch of payload.changes) {
+    if (ch.kind === 'removeToken' || ch.kind === 'removeCharacter') {
+      if (!known.has(ch.id)) throw new Error(`remoção de id nunca revelado: ${ch.id}`);
+    }
+  }
+  const rest = {
+    ...payload,
+    changes: payload.changes.filter((c) => c.kind !== 'removeToken' && c.kind !== 'removeCharacter'),
+  };
+  const json = JSON.stringify(rest);
+  for (const id of forbidden) {
+    if (json.includes(JSON.stringify(id))) throw new Error(`vazou ${id}`);
+  }
+  for (const ch of payload.changes) {
+    if (ch.kind === 'upsertCharacter') {
+      const real = post.characters[ch.character.id];
+      if (real && real.kind === 'npc' && real.hpVisibility !== 'exact' && ch.character.resources !== null) {
+        throw new Error(`resources de NPC ${real.id}`);
+      }
+      known.add(ch.character.id);
+    } else if (ch.kind === 'upsertToken') {
+      known.add(ch.token.id);
+    } else if (ch.kind === 'removeToken' || ch.kind === 'removeCharacter') {
+      known.delete(ch.id);
+    }
+  }
+}
+
+describe('verificador de vazamento (autoteste)', () => {
+  it('sinaliza remoção de token oculto nunca revelado', () => {
+    const state = createCampaign('c1', 'Mesa');
+    state.scene.tokens.t9 = { id: 't9', characterId: 'n9', cell: { col: 0, row: 0 }, size: 1, hidden: true };
+    const fake: ProjectedUpdate = { seq: 1, changes: [{ kind: 'removeToken', id: 't9' }], cues: [] };
+    expect(() => checkPlayerPayload(fake, new Set(), state, state)).toThrow(/nunca revelado/);
+    expect(() => checkPlayerPayload(fake, new Set(['t9']), state, state)).not.toThrow();
+  });
+  it('sinaliza upsert de token oculto', () => {
+    const state = createCampaign('c1', 'Mesa');
+    const tok = { id: 't9', characterId: 'n9', cell: { col: 0, row: 0 }, size: 1 as const, hidden: true };
+    state.scene.tokens.t9 = tok;
+    const fake: ProjectedUpdate = { seq: 1, changes: [{ kind: 'upsertToken', token: tok }], cues: [] };
+    expect(() => checkPlayerPayload(fake, new Set(), state, state)).toThrow(/vazou/);
+  });
+});
+
 describe('pipeline do servidor: não-vazamento para jogadores', () => {
   it('broadcasts de player nunca citam tokens/NPCs ocultos nem resources de NPC band/hidden', async () => {
     const store = new MemoryStore();
@@ -16,35 +86,19 @@ describe('pipeline do servidor: não-vazamento para jogadores', () => {
     let n = 0;
     const newId = () => `id${++n}`;
     let seen = 0;
+    const knownByTopic = new Map<string, Set<string>>();
 
     const run = async (cmd: Command) => {
+      const pre = (await store.load('c1'))!;
       const res = await processCommand(store, 'c1', GM, cmd, newId);
       expect(res.ok).toBe(true);
-      const state = (await store.load('c1'))!;
-      const visible = new Set(
-        Object.values(state.scene.tokens).filter((t) => !t.hidden).map((t) => t.characterId),
-      );
-      const forbidden = [
-        ...Object.values(state.scene.tokens).filter((t) => t.hidden).map((t) => t.id),
-        ...Object.values(state.characters).filter((c) => c.kind === 'npc' && !visible.has(c.id)).map((c) => c.id),
-      ];
+      const post = (await store.load('c1'))!;
       const fresh = store.broadcasts.slice(seen);
       seen = store.broadcasts.length;
       for (const b of fresh.filter((x) => x.topic.includes(':player:'))) {
-        // remoções de ids já conhecidos são legítimas; o resto não pode citar ids proibidos
-        const rest = {
-          ...b.payload,
-          changes: b.payload.changes.filter((c) => c.kind !== 'removeToken' && c.kind !== 'removeCharacter'),
-        };
-        const json = JSON.stringify(rest);
-        for (const id of forbidden) expect(json, `vazou ${id}`).not.toContain(JSON.stringify(id));
-        for (const ch of b.payload.changes) {
-          if (ch.kind !== 'upsertCharacter') continue;
-          const real = state.characters[ch.character.id];
-          if (real && real.kind === 'npc' && real.hpVisibility !== 'exact') {
-            expect(ch.character.resources).toBeNull();
-          }
-        }
+        const known = knownByTopic.get(b.topic) ?? new Set<string>();
+        knownByTopic.set(b.topic, known);
+        checkPlayerPayload(b.payload, known, pre, post);
       }
     };
 

@@ -75,6 +75,18 @@ describe('processCommand', () => {
     expect(loads).toBe(0);
   });
 
+  it('data URL em updateCharacter.patch é rejeitada sem carregar estado', async () => {
+    const { store, newId } = setup();
+    let loads = 0;
+    const orig = store.load.bind(store);
+    store.load = async (id) => { loads++; return orig(id); };
+    const res = await processCommand(store, 'c1', GM, {
+      type: 'updateCharacter', characterId: 'id1', patch: { fullBodyArt: 'data:image/png;base64,AAAA' },
+    }, newId);
+    expect(res).toEqual({ ok: false, error: 'invalid_value' });
+    expect(loads).toBe(0);
+  });
+
   it('campanha inexistente: not_found', async () => {
     const { store, newId } = setup();
     expect(await processCommand(store, 'x', GM, create('pc', 'Ana', 'exact'), newId))
