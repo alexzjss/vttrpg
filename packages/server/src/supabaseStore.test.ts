@@ -72,6 +72,11 @@ describe('createSupabaseStore', () => {
     expect(await createSupabaseStore(client).commit(input)).toBe('conflict');
   });
 
+  it('commit lança store_failed quando o rpc devolve null', async () => {
+    const { client } = fakeClient({});
+    await expect(createSupabaseStore(client).commit(input)).rejects.toThrow('store_failed');
+  });
+
   it('commit lança store_failed em erro do client', async () => {
     const { client } = fakeClient({ error: { message: 'boom' } });
     await expect(createSupabaseStore(client).commit(input)).rejects.toThrow('store_failed');

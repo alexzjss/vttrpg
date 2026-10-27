@@ -28,7 +28,9 @@ export function createSupabaseStore(client: SupabaseClient): CampaignStore {
         p_broadcasts: input.broadcasts,
       });
       if (error) throw new Error('store_failed');
-      return data === true ? 'ok' : 'conflict';
+      if (data === true) return 'ok';
+      if (data === false) return 'conflict';
+      throw new Error('store_failed');
     },
   };
 }

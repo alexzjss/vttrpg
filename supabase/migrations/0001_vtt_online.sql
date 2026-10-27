@@ -75,7 +75,7 @@ create or replace function public.vtt_commit(
 ) returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_rows int;
@@ -110,6 +110,24 @@ grant execute on function public.vtt_commit(uuid, int, jsonb, jsonb, jsonb, json
   to service_role;
 
 -- ------------------------------------------------- Realtime (canais privados)
+-- A policy roda como "authenticated", que nao enxerga public.accounts (RLS sem
+-- politicas); por isso a checagem de conta ativa passa por esta funcao
+-- security definer.
+create or replace function public.vtt_account_active()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists(
+    select 1 from public.accounts where id = (select auth.uid()) and active
+  );
+$$;
+
+revoke execute on function public.vtt_account_active() from public, anon;
+grant execute on function public.vtt_account_active() to authenticated;
+
 -- Clientes so leem (nunca publicam): sem politica de insert.
 drop policy if exists "vtt_read_own_topics" on realtime.messages;
 create policy "vtt_read_own_topics"
@@ -118,16 +136,18 @@ create policy "vtt_read_own_topics"
   to authenticated
   using (
     realtime.messages.extension = 'broadcast'
-    and exists (
-      select 1 from public.accounts a where a.id = auth.uid() and a.active
-    )
+    and public.vtt_account_active()
     and (
+      -- GMs veem todas as campanhas por design (ha um unico GM, dono de todas).
       (
         (auth.jwt()->'app_metadata'->>'account_role') = 'gm'
-        and realtime.topic() like 'campaign:%:gm'
+        and realtime.topic() ~ '^campaign:[0-9a-f-]{36}:gm$'
       )
-      or realtime.topic() = 'campaign:' || (auth.jwt()->'app_metadata'->>'campaign_id')
-                            || ':player:' || (auth.jwt()->'app_metadata'->>'character_id')
+      or (
+        (auth.jwt()->'app_metadata'->>'account_role') = 'player'
+        and realtime.topic() = 'campaign:' || (auth.jwt()->'app_metadata'->>'campaign_id')
+                              || ':player:' || (auth.jwt()->'app_metadata'->>'character_id')
+      )
     )
   );
 
