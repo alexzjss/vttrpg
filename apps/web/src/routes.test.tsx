@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./tabletop/Tabletop', () => ({ Tabletop: () => null }));
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import type { Character } from '@vtt/core';
@@ -35,7 +37,7 @@ describe('rotas', () => {
   it('/ com sessão de gm vai para /mestre', async () => {
     setSession({ role: 'gm' });
     renderAt('/', () => createFakeTransport());
-    expect(await screen.findByRole('heading', { name: 'Mestre' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Abrir a mesa' })).toBeTruthy();
   });
 
   it('/ com sessão de jogador vai para /jogador', async () => {
