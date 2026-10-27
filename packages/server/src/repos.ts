@@ -9,7 +9,7 @@ export interface AccountRow {
   active: boolean;
 }
 
-export type InsertAccountResult = 'ok' | 'username_taken' | 'character_taken';
+export type InsertAccountResult = 'ok' | 'username_taken' | 'character_taken' | 'gm_exists';
 
 export interface AccountsRepo {
   getById(id: string): Promise<AccountRow | null>;
@@ -81,7 +81,9 @@ export function createAccountsRepo(client: SupabaseClient): AccountsRepo {
       });
       if (!error) return 'ok';
       if (error.code !== UNIQUE_VIOLATION) throw new Error('db_failed');
-      return `${error.message} ${error.details ?? ''}`.includes('username') ? 'username_taken' : 'character_taken';
+      const text = `${error.message} ${error.details ?? ''}`;
+      if (text.includes('accounts_single_gm')) return 'gm_exists';
+      return text.includes('username') ? 'username_taken' : 'character_taken';
     },
     async setActive(id, active) {
       const { error } = await client.from('accounts').update({ active }).eq('id', id);

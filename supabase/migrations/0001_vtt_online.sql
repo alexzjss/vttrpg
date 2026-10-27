@@ -26,6 +26,10 @@ create table if not exists public.accounts (
 create unique index if not exists accounts_player_character_uniq
   on public.accounts (campaign_id, character_id) where role = 'player';
 
+-- No maximo uma conta GM (o setup tambem checa; o indice fecha a corrida).
+create unique index if not exists accounts_single_gm
+  on public.accounts ((true)) where role = 'gm';
+
 create table if not exists public.snapshots (
   campaign_id uuid primary key references public.campaigns on delete cascade,
   revision int not null,

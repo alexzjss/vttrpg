@@ -8,6 +8,9 @@ import { MemoryStore } from './memoryStore';
 import type { AccountRow, AccountsRepo, CampaignRow, CampaignsRepo } from './repos';
 import { route } from './router';
 
+const C1 = '00000000-0000-4000-8000-000000000001';
+const C2 = '00000000-0000-4000-8000-000000000002';
+const C3 = '00000000-0000-4000-8000-000000000003';
 const GM_ID = 'gm-user';
 const ANA_ID = 'ana-user';
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 5 };
@@ -19,17 +22,18 @@ const npc: Character = { id: 'n1', kind: 'npc', name: 'Orc', hpVisibility: 'hidd
 function world() {
   const accounts: AccountRow[] = [
     { id: GM_ID, username: 'mestre', role: 'gm', campaignId: null, characterId: null, active: true },
-    { id: ANA_ID, username: 'ana', role: 'player', campaignId: 'c1', characterId: 'p1', active: true },
+    { id: ANA_ID, username: 'ana', role: 'player', campaignId: C1, characterId: 'p1', active: true },
   ];
   const campaigns: CampaignRow[] = [];
   const snapshots: Array<{ row: CampaignRow; state: unknown }> = [];
   const adminCalls: string[] = [];
   const users: Array<{ email: string; password: string; meta: Record<string, unknown> }> = [];
   const store = new MemoryStore();
-  const state: CampaignState = createCampaign('c1', 'Mesa');
+  const state: CampaignState = createCampaign(C1, 'Mesa');
   state.characters = { p1: pc('p1', 'Ana'), p2: pc('p2', 'Bia'), n1: npc };
   store.seed(state);
-  store.seed(createCampaign('c2', 'Outra'));
+  store.seed(createCampaign(C2, 'Outra'));
+  const forced: { insert?: 'gm_exists' } = {};
   let n = 0;
   const reservedSlugs = new Set<string>();
 
@@ -40,7 +44,11 @@ function world() {
       accounts.find((a) => a.role === 'player' && a.campaignId === c && a.characterId === ch) ?? null,
     listByCampaign: async (c) => accounts.filter((a) => a.campaignId === c),
     hasGm: async () => accounts.some((a) => a.role === 'gm'),
-    insert: async (row) => { accounts.push(row); return 'ok'; },
+    insert: async (row) => {
+      if (forced.insert) return forced.insert;
+      accounts.push(row);
+      return 'ok';
+    },
     setActive: async (id, active) => { accounts.find((a) => a.id === id)!.active = active; },
     list: async () => campaigns,
     create: async (row, initial) => {
@@ -74,7 +82,7 @@ function world() {
     env: { SUPABASE_URL: 'http://fake', SUPABASE_SECRET_KEY: 'k', SETUP_TOKEN: 'tok-123' },
     store, identify, admin, db, newId: () => `id${++n}`,
   };
-  return { deps, accounts, campaigns, snapshots, adminCalls, users, reservedSlugs, store };
+  return { deps, accounts, campaigns, snapshots, adminCalls, users, reservedSlugs, store, forced };
 }
 
 const call = (
@@ -92,7 +100,7 @@ describe('identidade e /api/me', () => {
     const { deps } = world();
     expect(await call(deps, 'GET', '/api/me', null)).toEqual({ status: 401, body: { error: 'unauthorized' } });
     expect(await call(deps, 'GET', '/api/me', ANA_ID)).toEqual({
-      status: 200, body: { username: 'ana', role: 'player', campaignId: 'c1', characterId: 'p1' },
+      status: 200, body: { username: 'ana', role: 'player', campaignId: C1, characterId: 'p1' },
     });
   });
 
@@ -100,14 +108,14 @@ describe('identidade e /api/me', () => {
     const w = world();
     w.accounts.find((a) => a.id === ANA_ID)!.active = false;
     expect((await call(w.deps, 'GET', '/api/me', ANA_ID)).status).toBe(401);
-    expect((await call(w.deps, 'GET', '/api/state', ANA_ID, { query: { campaignId: 'c1' } })).status).toBe(401);
+    expect((await call(w.deps, 'GET', '/api/state', ANA_ID, { query: { campaignId: C1 } })).status).toBe(401);
   });
 });
 
 describe('GET /api/state', () => {
   it('jogador vê a própria campanha, projetada (sem NPC oculto)', async () => {
     const { deps } = world();
-    const res = await call(deps, 'GET', '/api/state', ANA_ID, { query: { campaignId: 'c1' } });
+    const res = await call(deps, 'GET', '/api/state', ANA_ID, { query: { campaignId: C1 } });
     expect(res.status).toBe(200);
     const text = JSON.stringify(res.body);
     expect(text).toContain('Ana');
@@ -116,15 +124,15 @@ describe('GET /api/state', () => {
 
   it('jogador pedindo outra campanha recebe 403', async () => {
     const { deps } = world();
-    expect(await call(deps, 'GET', '/api/state', ANA_ID, { query: { campaignId: 'c2' } })).toEqual({
+    expect(await call(deps, 'GET', '/api/state', ANA_ID, { query: { campaignId: C2 } })).toEqual({
       status: 403, body: { error: 'forbidden' },
     });
   });
 
   it('GM lê qualquer campanha; inexistente dá 404; sem campaignId dá 400', async () => {
     const { deps } = world();
-    expect((await call(deps, 'GET', '/api/state', GM_ID, { query: { campaignId: 'c2' } })).status).toBe(200);
-    expect((await call(deps, 'GET', '/api/state', GM_ID, { query: { campaignId: 'nada' } })).status).toBe(404);
+    expect((await call(deps, 'GET', '/api/state', GM_ID, { query: { campaignId: C2 } })).status).toBe(200);
+    expect((await call(deps, 'GET', '/api/state', GM_ID, { query: { campaignId: C3 } })).status).toBe(404);
     expect((await call(deps, 'GET', '/api/state', GM_ID)).status).toBe(400);
   });
 });
@@ -133,23 +141,23 @@ describe('POST /api/command', () => {
   it('type fora da lista dá 400 bad_command', async () => {
     const { deps } = world();
     const res = await call(deps, 'POST', '/api/command', GM_ID, {
-      body: { campaignId: 'c1', command: { type: 'dropTables' } },
+      body: { campaignId: C1, command: { type: 'dropTables' } },
     });
     expect(res).toEqual({ status: 400, body: { error: 'bad_command' } });
-    expect((await call(deps, 'POST', '/api/command', GM_ID, { body: { campaignId: 'c1' } })).status).toBe(400);
+    expect((await call(deps, 'POST', '/api/command', GM_ID, { body: { campaignId: C1 } })).status).toBe(400);
   });
 
   it('jogador mandando startEncounter recebe 200 {ok:false,error:not_gm}', async () => {
     const { deps } = world();
     const res = await call(deps, 'POST', '/api/command', ANA_ID, {
-      body: { campaignId: 'c1', command: { type: 'startEncounter', entries: [] } },
+      body: { campaignId: C1, command: { type: 'startEncounter', entries: [] } },
     });
     expect(res).toEqual({ status: 200, body: { ok: false, error: 'not_gm' } });
   });
 
   it('jogador em outra campanha recebe 403; sem token 401', async () => {
     const { deps } = world();
-    const body = { campaignId: 'c2', command: { type: 'nextTurn' } };
+    const body = { campaignId: C2, command: { type: 'nextTurn' } };
     expect((await call(deps, 'POST', '/api/command', ANA_ID, { body })).status).toBe(403);
     expect((await call(deps, 'POST', '/api/command', null, { body })).status).toBe(401);
   });
@@ -157,7 +165,7 @@ describe('POST /api/command', () => {
   it('GM executa um comando e o resultado vem em 200', async () => {
     const { deps } = world();
     const res = await call(deps, 'POST', '/api/command', GM_ID, {
-      body: { campaignId: 'c1', command: { type: 'nextTurn' } },
+      body: { campaignId: C1, command: { type: 'nextTurn' } },
     });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: false, error: 'no_encounter' });
@@ -202,19 +210,19 @@ describe('campanhas', () => {
 
 describe('contas', () => {
   const body = (over: Record<string, unknown> = {}) => ({
-    campaignId: 'c1', username: 'Bia', password: 'segredo1', characterId: 'p2', ...over,
+    campaignId: C1, username: 'Bia', password: 'segredo1', characterId: 'p2', ...over,
   });
 
   it('só GM; jogador recebe 403', async () => {
     const { deps } = world();
-    expect((await call(deps, 'GET', '/api/accounts', ANA_ID, { query: { campaignId: 'c1' } })).status).toBe(403);
+    expect((await call(deps, 'GET', '/api/accounts', ANA_ID, { query: { campaignId: C1 } })).status).toBe(403);
     expect((await call(deps, 'POST', '/api/accounts', ANA_ID, { body: body() })).status).toBe(403);
     expect((await call(deps, 'PATCH', '/api/accounts', ANA_ID, { body: { id: ANA_ID, active: false } })).status).toBe(403);
   });
 
   it('lista sem campos de senha', async () => {
     const { deps } = world();
-    const res = await call(deps, 'GET', '/api/accounts', GM_ID, { query: { campaignId: 'c1' } });
+    const res = await call(deps, 'GET', '/api/accounts', GM_ID, { query: { campaignId: C1 } });
     expect(res.body).toEqual({ accounts: [{ id: ANA_ID, username: 'ana', characterId: 'p1', active: true }] });
     expect(JSON.stringify(res.body)).not.toMatch(/password|senha/i);
   });
@@ -227,7 +235,7 @@ describe('contas', () => {
     expect(JSON.stringify(res.body)).not.toContain('segredo1');
     expect(w.users[0]).toEqual({
       email: 'bia@vtt.local', password: 'segredo1',
-      meta: { account_role: 'player', campaign_id: 'c1', character_id: 'p2' },
+      meta: { account_role: 'player', campaign_id: C1, character_id: 'p2' },
     });
   });
 
@@ -235,10 +243,10 @@ describe('contas', () => {
     const { deps } = world();
     expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ password: '12345' }) })).status).toBe(400);
     expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ username: 'a b' }) })).status).toBe(400);
-    expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ campaignId: 'nada' }) })).status).toBe(404);
+    expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ campaignId: C3 }) })).status).toBe(404);
     expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ characterId: 'n1' }) })).status).toBe(400);
     expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ characterId: 'zzz' }) })).status).toBe(400);
-    expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ campaignId: 'c2', characterId: 'p1' }) })).status).toBe(400);
+    expect((await call(deps, 'POST', '/api/accounts', GM_ID, { body: body({ campaignId: C2, characterId: 'p1' }) })).status).toBe(400);
   });
 
   it('usuário em uso e PC já com conta dão 409', async () => {
@@ -313,5 +321,42 @@ describe('configuração do roteador', () => {
     expect((await call(deps, 'POST', '/api/setup', null, { body: {} })).status).toBe(503);
     expect((await call(deps, 'GET', '/api/me', ANA_ID)).status).toBe(503);
     expect((await call(deps, 'GET', '/api/health', null)).status).toBe(200);
+  });
+});
+
+describe('payloads malformados', () => {
+  it('moveToken com cell não numérica ou ausente dá 400 bad_command e nada é gravado', async () => {
+    const w = world();
+    for (const to of [{ col: 'x', row: 1 }, undefined]) {
+      const res = await call(w.deps, 'POST', '/api/command', ANA_ID, {
+        body: { campaignId: C1, command: { type: 'moveToken', tokenId: 't', to } },
+      });
+      expect(res).toEqual({ status: 400, body: { error: 'bad_command' } });
+    }
+    expect(w.store.commits).toHaveLength(0);
+  });
+
+  it('campaignId que não é UUID dá 400 bad_campaign', async () => {
+    const { deps } = world();
+    const bad = { error: 'bad_campaign' };
+    expect(await call(deps, 'GET', '/api/state', GM_ID, { query: { campaignId: "x' or 1=1" } })).toEqual({ status: 400, body: bad });
+    expect(await call(deps, 'POST', '/api/command', GM_ID, {
+      body: { campaignId: 'c1', command: { type: 'nextTurn' } },
+    })).toEqual({ status: 400, body: bad });
+    expect(await call(deps, 'GET', '/api/accounts', GM_ID, { query: { campaignId: 'c1' } })).toEqual({ status: 400, body: bad });
+    expect((await call(deps, 'POST', '/api/accounts', GM_ID, {
+      body: { campaignId: 'c1', username: 'bia', password: 'segredo1', characterId: 'p2' },
+    })).body).toEqual(bad);
+  });
+
+  it('setup: violação do índice de GM único vira 409 already_setup e desfaz o usuário', async () => {
+    const w = world();
+    w.accounts.splice(0, w.accounts.length);
+    w.forced.insert = 'gm_exists';
+    const res = await call(w.deps, 'POST', '/api/setup', null, {
+      body: { token: 'tok-123', username: 'mestre', password: 'segredo1' },
+    });
+    expect(res).toEqual({ status: 409, body: { error: 'already_setup' } });
+    expect(w.adminCalls).toEqual(['del:user-1']);
   });
 });

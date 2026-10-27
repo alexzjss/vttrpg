@@ -1,6 +1,6 @@
 import { emailForUsername } from '@vtt/core';
 import { json, type Handler } from '../http';
-import { badRequest, forbidden, isFailure, isRecord, requireGm } from './guard';
+import { badCampaign, badRequest, forbidden, isFailure, isRecord, isUuid, requireGm } from './guard';
 
 export const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{2,31}$/;
 export const MIN_PASSWORD = 6;
@@ -9,7 +9,7 @@ export const listAccounts: Handler = async (req, deps) => {
   const who = await requireGm(req, deps);
   if (isFailure(who)) return who;
   const campaignId = req.query.campaignId;
-  if (!campaignId) return badRequest();
+  if (!isUuid(campaignId)) return badCampaign();
   const rows = await deps.db.listByCampaign(campaignId);
   return json(200, {
     accounts: rows.map((a) => ({ id: a.id, username: a.username, characterId: a.characterId, active: a.active })),
@@ -20,7 +20,8 @@ export const createAccount: Handler = async (req, deps) => {
   const who = await requireGm(req, deps);
   if (isFailure(who)) return who;
   const b = req.body;
-  if (!isRecord(b) || typeof b.campaignId !== 'string' || typeof b.characterId !== 'string') return badRequest();
+  if (!isRecord(b) || typeof b.characterId !== 'string') return badRequest();
+  if (!isUuid(b.campaignId)) return badCampaign();
   const username = typeof b.username === 'string' ? b.username.trim().toLowerCase() : '';
   if (!USERNAME_RE.test(username)) return badRequest('invalid_username');
   if (typeof b.password !== 'string' || b.password.length < MIN_PASSWORD) return badRequest('weak_password');

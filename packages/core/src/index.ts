@@ -5,6 +5,7 @@ export * from './reducer';
 export * from './campaign';
 export * from './commands';
 export * from './account';
+export * from './wellFormed';
 export * from './decide';
 export * from './initiative';
 export * from './projection';

@@ -35,7 +35,7 @@ export const setup: Handler = async (req, deps) => {
   }
   if (outcome !== 'ok') {
     await deps.admin.deleteUser(userId).catch(() => undefined);
-    return json(409, { error: outcome });
+    return json(409, { error: outcome === 'gm_exists' ? 'already_setup' : outcome });
   }
   return json(200, { ok: true, username });
 };
