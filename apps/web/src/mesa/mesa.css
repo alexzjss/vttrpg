@@ -1,0 +1,19 @@
+.mesa-page { position: fixed; inset: 0; width: 100vw; height: 100vh; background: var(--color-bg); overflow: hidden; }
+.mesa-page > .tabletop, .mesa-page canvas { display: block; }
+.turn-strip { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+.turn-strip-body {
+  pointer-events: auto; display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 6px 12px;
+  background: var(--color-surface); border: 1px solid var(--color-grid); border-radius: 8px; color: var(--color-text);
+}
+.turn-strip-round, .turn-strip-scene { font-family: var(--font-display); color: var(--color-text-muted); }
+.turn-strip-scene { color: var(--color-text); }
+.turn-strip-list { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.turn-item { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; border-radius: 999px; border: 2px solid transparent; opacity: 0.75; }
+.turn-item.current { border-color: var(--color-pc); background: var(--color-surface-alt); opacity: 1; }
+.turn-portrait { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--color-surface-alt); }
+.turn-initials { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: var(--color-text-muted); }
+.turn-name { font-size: 13px; }
+.mesa-leave {
+  position: absolute; right: 12px; bottom: 12px; z-index: 5; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  background: var(--color-surface); color: var(--color-text-muted); border: 1px solid var(--color-grid); border-radius: 6px;
+}
