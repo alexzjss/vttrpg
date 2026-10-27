@@ -353,10 +353,11 @@ Seleção de alvo clicando na aba `/mesa` enquanto se usa `/jogador`: no MVP, al
   com e-mail sintético (`<usuario>@<campanha>.vtt.local`) e senha definida pelo mestre — mesma experiência de
   login, claims em `app_metadata`. O segredo JWT só existe nas funções do servidor.
 - **Projeção/redação**: existe **um tipo de estado completo** (servidor) e **um tipo de estado projetado**
-  (cliente). `core.decide` emite eventos completos; `core.redact(event, audience)` gera a versão de cada audiência
-  (ou `null` se ela não deve ver). O cliente tem **um reducer de estado projetado** que só recebe eventos redigidos.
-  O servidor usa o reducer completo. Testes de propriedade garantem `project(applyFull(s, e), a) ==
-  applyProjected(project(s, a), redact(e, a))`.
+  (cliente). `core.decide` emite eventos completos que só o servidor aplica. Para cada audiência o servidor envia
+  um `ProjectedUpdate` = **diferença por entidade** entre `project(antes, a)` e `project(depois, a)` + **cues**
+  de apresentação (para animações) derivados dos eventos e filtrados pela projeção. Assim nenhum dado oculto sai
+  por construção. Teste de propriedade: `applyChanges(project(s, a), diffProjection(project(s, a),
+  project(s', a)))` é igual a `project(s', a)`.
 - **Latência**: alvo < 500 ms do clique ao evento na tela (p95). Comandos são serializados por campanha com
   `expectedRevision` + até 3 retries. Se Vercel Functions não atingir o alvo, a mesma função roda como
   Supabase Edge Function (o `core` é TS puro e portável).
