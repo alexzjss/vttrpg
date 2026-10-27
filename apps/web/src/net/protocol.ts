@@ -10,4 +10,5 @@ export type ClientMessage =
 export type WorkerMessage =
   | { t: 'snapshot'; state: ProjectedState; reqId?: number }
   | { t: 'result'; reqId: number; result: CommandResult }
-  | { t: 'update'; update: ProjectedUpdate };
+  | { t: 'update'; update: ProjectedUpdate }
+  | { t: 'error'; reqId: number; message: string };

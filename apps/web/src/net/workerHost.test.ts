@@ -106,7 +106,7 @@ describe('workerHost', () => {
     err.mockRestore();
   });
 
-  it('falha em save não bloqueia result e updates', async () => {
+  it('falha em save nÃ£o bloqueia result e updates', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     const store = { load: async () => undefined, save: async () => { throw new Error('idb'); } };
     const host = createWorkerHost(store, { newId: () => 'x' });
@@ -120,8 +120,8 @@ describe('workerHost', () => {
     err.mockRestore();
   });
 
-  it('comandos de duas portas são processados em ordem, com revisões crescentes por porta', async () => {
-    const { mkPort, flush, store } = setup();
+  it('comandos de duas portas sÃ£o processados em ordem, com revisÃµes crescentes por porta', async () => {
+    const { mkPort, store } = setup();
     store.save.mockImplementation(() => new Promise((r) => setTimeout(r, 5)));
     const a = mkPort();
     const b = mkPort();
@@ -136,7 +136,6 @@ describe('workerHost', () => {
       const revs = port.msgs.flatMap((m) => (m.t === 'update' ? [m.update.revision] : []));
       expect(revs).toEqual([1, 2, 3, 4, 5, 6]);
     }
-    void flush;
   });
 
   it('reset vai como snapshot sem reqId', async () => {
@@ -147,5 +146,15 @@ describe('workerHost', () => {
     await flush();
     expect(gm.msgs[1]).toMatchObject({ t: 'snapshot' });
     expect((gm.msgs[1] as { reqId?: number }).reqId).toBeUndefined();
+  });
+
+  it('resync antes de connect recebe resposta de erro', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { mkPort, flush } = setup();
+    const p = mkPort();
+    p.send({ t: 'resync', reqId: 4 });
+    await flush();
+    expect(p.msgs[0]).toMatchObject({ t: 'error', reqId: 4 });
+    err.mockRestore();
   });
 });

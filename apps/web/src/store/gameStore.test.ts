@@ -82,7 +82,7 @@ describe('gameStore', () => {
     expect(store.getState().cues).toEqual([]);
   });
 
-  it('updates durante um resync em andamento são ignorados', async () => {
+  it('updates durante um resync em andamento sÃ£o ignorados', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
@@ -98,7 +98,7 @@ describe('gameStore', () => {
     expect(store.getState().state).toEqual(snap);
   });
 
-  it('resync que falha põe status error', async () => {
+  it('resync que falha pÃµe status error', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
@@ -108,7 +108,7 @@ describe('gameStore', () => {
     expect(store.getState().status).toBe('error');
   });
 
-  it('send que rejeita põe status error e repropaga', async () => {
+  it('send que rejeita pÃµe status error e repropaga', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
@@ -117,7 +117,7 @@ describe('gameStore', () => {
     expect(store.getState().status).toBe('error');
   });
 
-  it('snapshot não solicitado (reset) substitui o estado e limpa cues', async () => {
+  it('snapshot nÃ£o solicitado (reset) substitui o estado e limpa cues', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);

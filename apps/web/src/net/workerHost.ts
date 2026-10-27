@@ -48,15 +48,20 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
     const auth = authority!;
     switch (msg.t) {
       case 'connect':
-        entry.session = msg.session;
-        entry.audience = actorAudience(msg.session);
-        entry.port.postMessage({ t: 'snapshot', state: auth.snapshotFor(entry.audience), reqId: msg.reqId });
-        return;
-      case 'resync':
-        if (entry.audience) {
+      case 'resync': {
+        try {
+          if (msg.t === 'connect') {
+            entry.session = msg.session;
+            entry.audience = actorAudience(msg.session);
+          }
+          if (!entry.audience) throw new Error('not connected');
           entry.port.postMessage({ t: 'snapshot', state: auth.snapshotFor(entry.audience), reqId: msg.reqId });
+        } catch (e) {
+          console.error('[workerHost] erro em connect/resync', e);
+          entry.port.postMessage({ t: 'error', reqId: msg.reqId, message: e instanceof Error ? e.message : String(e) });
         }
         return;
+      }
       case 'reset': {
         const fresh = new Authority(newCampaign(), { newId });
         authority = fresh;
@@ -92,7 +97,7 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
     }
   }
 
-  // Uma única fila serial para todas as portas: ordem global dos comandos.
+  // Uma Ãºnica fila serial para todas as portas: ordem global dos comandos.
   let chain: Promise<void> = Promise.resolve();
   const enqueue = (entry: PortEntry, msg: ClientMessage) => {
     chain = chain.then(() => process(entry, msg)).catch((e) => console.error('[workerHost] erro', e));

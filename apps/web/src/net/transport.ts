@@ -6,7 +6,7 @@ export type Session = Actor; // fase 2 troca por sessão autenticada
 export interface Transport {
   connect(session: Session): Promise<ProjectedState>;
   onUpdate(listener: (u: ProjectedUpdate) => void): () => void;
-  /** Snapshots n�o solicitados (ex.: reset da campanha). */
+  /** Snapshots não solicitados (ex.: reset da campanha). */
   onSnapshot(listener: (s: ProjectedState) => void): () => void;
   reset(): void;
   send(cmd: Command): Promise<CommandResult>;
