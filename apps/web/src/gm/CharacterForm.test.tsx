@@ -27,6 +27,12 @@ describe('CharacterForm', () => {
     expect(cmd.input.resources.hp).toEqual({ current: 12, max: 12 });
   });
 
+  it('ao editar, o controle de tipo fica desabilitado', () => {
+    const fake = createFakeTransport();
+    render(<CharacterForm character={existing} send={(c) => fake.send(c)} onDone={() => {}} />);
+    expect((screen.getByLabelText('Tipo') as HTMLSelectElement).disabled).toBe(true);
+  });
+
   it('nome vazio desabilita Salvar', () => {
     const fake = createFakeTransport();
     render(<CharacterForm send={(c) => fake.send(c)} onDone={() => {}} />);

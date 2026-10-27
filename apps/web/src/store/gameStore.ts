@@ -8,23 +8,34 @@ import {
   type ProjectedState,
   type ProjectedUpdate,
 } from '@vtt/core';
+import { LOAD_FAILED } from '../net/protocol';
 import type { Session, Transport } from '../net/transport';
+
+/** Fila de cues sem consumidor (ex.: aba sem tabletop) não cresce sem limite. */
+const MAX_CUES = 50;
 
 interface GameStore {
   status: 'idle' | 'connecting' | 'ready' | 'error';
   state: ProjectedState | null;
   cues: Array<{ id: number; cue: Cue }>;
   lastError: ErrorCode | null;
+  /** A campanha salva não pôde ser lida (worker em modo de falha). */
+  loadFailed: boolean;
   connect(t: Transport, s: Session): Promise<void>;
   /** Solta assinaturas e zera o estado. Não fecha o transporte: quem o criou é dono dele. */
   disconnect(): void;
+  /** Reinicia a campanha (só o mestre); se a conexão falhou, reconecta em seguida. */
+  resetCampaign(): Promise<void>;
   send(cmd: Command): Promise<CommandResult>; // grava lastError se falhar
   takeCues(): Cue[]; // devolve e limpa a fila
 }
 
+const isLoadFailed = (e: unknown) => e instanceof Error && e.message === LOAD_FAILED;
+
 export function createGameStore() {
   // Única conexão vigente. Um connect/resync/send de transporte superado é descartado.
   let currentTransport: Transport | null = null;
+  let currentSession: Session | null = null;
   let unsubscribe: (() => void) | null = null;
   let unsubscribeSnapshot: (() => void) | null = null;
   let resyncing = false;
@@ -44,8 +55,8 @@ export function createGameStore() {
       try {
         const state = await t.resync();
         if (currentTransport === t) set({ state });
-      } catch {
-        if (currentTransport === t) set({ status: 'error' });
+      } catch (e) {
+        if (currentTransport === t) set({ status: 'error', loadFailed: isLoadFailed(e) });
       } finally {
         resyncing = false;
       }
@@ -54,13 +65,15 @@ export function createGameStore() {
     function onUpdate(t: Transport, u: ProjectedUpdate) {
       const { state } = get();
       if (!state || resyncing) return;
-      if (u.revision !== state.revision + 1) {
-        void resync(t); // lacuna: descarta os cues do update e refaz o estado
+      if (u.revision <= state.revision) return; // já refletido (ex.: snapshot mais novo)
+      if (u.baseRevision !== state.revision) {
+        void resync(t); // lacuna real: descarta os cues do update e refaz o estado
         return;
       }
+      const cues = [...get().cues, ...u.cues.map((cue) => ({ id: ++cueId, cue }))];
       set({
         state: applyChanges(state, u.changes, u.revision),
-        cues: [...get().cues, ...u.cues.map((cue) => ({ id: ++cueId, cue }))],
+        cues: cues.length > MAX_CUES ? cues.slice(cues.length - MAX_CUES) : cues,
       });
     }
 
@@ -69,15 +82,17 @@ export function createGameStore() {
       state: null,
       cues: [],
       lastError: null,
+      loadFailed: false,
       async connect(t, s) {
         dropSubscriptions();
         currentTransport = t;
-        set({ status: 'connecting', lastError: null });
+        currentSession = s;
+        set({ status: 'connecting', lastError: null, loadFailed: false });
         let state: ProjectedState;
         try {
           state = await t.connect(s);
-        } catch {
-          if (currentTransport === t) set({ status: 'error' });
+        } catch (e) {
+          if (currentTransport === t) set({ status: 'error', loadFailed: isLoadFailed(e) });
           return;
         }
         if (currentTransport !== t) return; // superado por outro connect ou disconnect
@@ -90,7 +105,15 @@ export function createGameStore() {
       disconnect() {
         dropSubscriptions();
         currentTransport = null;
-        set({ status: 'idle', state: null, cues: [], lastError: null });
+        currentSession = null;
+        set({ status: 'idle', state: null, cues: [], lastError: null, loadFailed: false });
+      },
+      async resetCampaign() {
+        const t = currentTransport;
+        const s = currentSession;
+        if (!t || !s) return;
+        t.reset(); // mensagens de uma porta são serializadas: o connect abaixo vê a campanha nova
+        if (get().status === 'error') await get().connect(t, s);
       },
       async send(cmd) {
         const t = currentTransport;
@@ -99,7 +122,7 @@ export function createGameStore() {
         try {
           result = await t.send(cmd);
         } catch (e) {
-          if (currentTransport === t) set({ status: 'error' });
+          if (currentTransport === t) set({ status: 'error', loadFailed: isLoadFailed(e) });
           throw e;
         }
         if (currentTransport === t && !result.ok) set({ lastError: result.error });

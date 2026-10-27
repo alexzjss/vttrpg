@@ -26,13 +26,19 @@ export function createLocalTransport(): Transport {
       pending.get(msg.reqId)?.resolve(msg.result);
       pending.delete(msg.reqId);
     } else if (msg.t === 'error') {
-      snapshotWaiters.get(msg.reqId)?.reject(new Error(msg.message));
+      const err = new Error(msg.message);
+      snapshotWaiters.get(msg.reqId)?.reject(err);
       snapshotWaiters.delete(msg.reqId);
+      pending.get(msg.reqId)?.reject(err);
+      pending.delete(msg.reqId);
     } else listeners.forEach((l) => l(msg.update));
   };
   port.start();
 
   const post = (m: ClientMessage) => port.postMessage(m);
+  // A aba fechada sem close() (navegação, fechamento) também precisa sair do worker.
+  const onPageHide = () => post({ t: 'disconnect' });
+  globalThis.addEventListener?.('pagehide', onPageHide);
   const awaitSnapshot = (build: (reqId: number) => ClientMessage) =>
     new Promise<ProjectedState>((resolve, reject) => {
       const reqId = nextReq++;
@@ -60,6 +66,8 @@ export function createLocalTransport(): Transport {
       });
     },
     close() {
+      globalThis.removeEventListener?.('pagehide', onPageHide);
+      post({ t: 'disconnect' });
       port.close();
       listeners.clear();
       snapshotListeners.clear();

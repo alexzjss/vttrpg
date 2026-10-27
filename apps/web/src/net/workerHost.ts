@@ -6,7 +6,7 @@ import {
   type Audience,
   type CampaignState,
 } from '@vtt/core';
-import type { ClientMessage, WorkerMessage } from './protocol';
+import { LOAD_FAILED, type ClientMessage, type WorkerMessage } from './protocol';
 import type { Session } from './transport';
 
 export interface CampaignStore {
@@ -20,19 +20,39 @@ interface PortEntry { port: HostPort; session: Session | null; audience: Audienc
 
 const newCampaign = () => createCampaign('local', 'Campanha local');
 
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isNum = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+
+/** Confere o formato mínimo de uma campanha salva; dado inválido nunca deve virar Authority. */
+export function isValidCampaign(v: unknown): v is CampaignState {
+  if (!isObject(v) || !isNum(v.revision) || !isObject(v.characters)) return false;
+  if (!isObject(v.scene) || !isObject(v.scene.grid) || !isObject(v.scene.tokens)) return false;
+  const g = v.scene.grid;
+  if (!isNum(g.cols) || !isNum(g.rows) || !isNum(g.cellSize)) return false;
+  return isObject(v.encounter);
+}
+
 /** Lógica do worker sem APIs de worker: testável com portas falsas. */
 export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
   const ports = new Set<PortEntry>();
   let authority: Authority | null = null;
+  // Modo de falha: a campanha salva existe mas não pôde ser lida. Nada é salvo (para não
+  // sobrescrever o dado) e toda requisição recebe `load_failed` até o mestre reiniciar.
+  let failed = false;
   const ready = store
     .load()
-    .catch((e) => {
-      console.error('[workerHost] falha ao carregar a campanha; usando uma nova', e);
-      return undefined;
-    })
     .then((saved) => {
-      authority = new Authority(saved ?? newCampaign(), { newId });
+      if (saved === undefined) authority = new Authority(newCampaign(), { newId });
+      else if (isValidCampaign(saved)) authority = new Authority(saved, { newId });
+      else {
+        console.error('[workerHost] campanha salva com formato inválido');
+        failed = true;
+      }
+    })
+    .catch((e) => {
+      console.error('[workerHost] falha ao carregar a campanha', e);
+      failed = true;
     });
 
   const persist = async (s: CampaignState) => {
@@ -45,6 +65,28 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
 
   async function process(entry: PortEntry, msg: ClientMessage): Promise<void> {
     await ready;
+    if (msg.t === 'disconnect') {
+      ports.delete(entry);
+      return;
+    }
+    if (msg.t === 'reset') {
+      // M4: só uma sessão de mestre pode reiniciar a campanha.
+      if (entry.session?.role !== 'gm') return;
+      const fresh = new Authority(newCampaign(), { newId });
+      authority = fresh;
+      failed = false;
+      for (const p of ports) {
+        if (p.audience) p.port.postMessage({ t: 'snapshot', state: fresh.snapshotFor(p.audience) });
+      }
+      await persist(fresh.getState());
+      return;
+    }
+    if (failed) {
+      // Registra a sessão (para o mestre poder reiniciar), mas nunca a audiência.
+      if (msg.t === 'connect') entry.session = msg.session;
+      entry.port.postMessage({ t: 'error', reqId: msg.reqId, message: LOAD_FAILED });
+      return;
+    }
     const auth = authority!;
     switch (msg.t) {
       case 'connect':
@@ -60,15 +102,6 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
           console.error('[workerHost] erro em connect/resync', e);
           entry.port.postMessage({ t: 'error', reqId: msg.reqId, message: e instanceof Error ? e.message : String(e) });
         }
-        return;
-      }
-      case 'reset': {
-        const fresh = new Authority(newCampaign(), { newId });
-        authority = fresh;
-        for (const p of ports) {
-          if (p.audience) p.port.postMessage({ t: 'snapshot', state: fresh.snapshotFor(p.audience) });
-        }
-        await persist(fresh.getState());
         return;
       }
       case 'command': {

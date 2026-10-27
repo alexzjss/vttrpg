@@ -19,7 +19,7 @@ export function CharacterList({ state, send, onNew, onEdit }: Props) {
     const cell = firstFreeCell(state.scene);
     if (!cell) return setError('Não há célula livre na cena.');
     setError(null);
-    void send({ type: 'placeToken', characterId: c.id, cell });
+    void send({ type: 'placeToken', characterId: c.id, cell, hidden: c.kind === 'npc' });
   };
   const remove = (c: ProjectedCharacter) => {
     if (window.confirm(`Excluir ${c.name}?`)) void send({ type: 'deleteCharacter', characterId: c.id });

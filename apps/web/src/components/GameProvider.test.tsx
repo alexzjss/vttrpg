@@ -46,6 +46,22 @@ describe('GameProvider', () => {
     expect(getSession()).toBeNull();
   });
 
+  it('load_failed: mostra a mensagem e deixa o mestre reiniciar a campanha', async () => {
+    const t = createFakeTransport();
+    const original = t.connect;
+    let fail = true;
+    t.connect = async (sess) => {
+      if (fail) throw new Error('load_failed');
+      return original(sess);
+    };
+    t.reset = () => { fail = false; };
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderProvider(() => t);
+    expect((await screen.findByRole('alert')).textContent).toBe('Falha ao carregar a campanha salva.');
+    fireEvent.click(screen.getByRole('button', { name: 'Reiniciar campanha' }));
+    expect(await screen.findByText('Conteúdo')).toBeTruthy();
+  });
+
   it('fecha o transporte ao desmontar e zera a store', async () => {
     const t = createFakeTransport();
     const close = vi.spyOn(t, 'close');

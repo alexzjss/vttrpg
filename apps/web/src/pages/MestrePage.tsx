@@ -1,6 +1,7 @@
 import type { Id } from '@vtt/core';
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { ResetCampaignButton } from '../components/ResetCampaignButton';
 import { ErrorToast, type Notice } from '../components/ErrorToast';
 import { CharacterForm } from '../gm/CharacterForm';
 import { CharacterList } from '../gm/CharacterList';
@@ -48,6 +49,7 @@ export function MestrePage() {
         <h1>{state.name}</h1>
         <div className="gm-header-actions">
           <button type="button" onClick={openTableWindow}>Abrir a mesa</button>
+          <ResetCampaignButton />
           <button type="button" onClick={() => { clearSession(); navigate('/login'); }}>Sair</button>
         </div>
       </header>

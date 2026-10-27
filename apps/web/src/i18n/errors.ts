@@ -14,6 +14,8 @@ const messages: Record<ErrorCode, string> = {
   invalid_order: 'A ordem de iniciativa é inválida.',
 };
 
+export const LOAD_FAILED_MESSAGE = 'Falha ao carregar a campanha salva.';
+
 export function errorMessage(code: ErrorCode): string {
   return messages[code];
 }

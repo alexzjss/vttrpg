@@ -64,11 +64,56 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
-    t.push({ revision: 1, changes: [], cues: [cue] });
+    t.push({ revision: 1, baseRevision: 0, changes: [], cues: [cue] });
     expect(store.getState().cues).toHaveLength(1);
     expect(store.getState().takeCues()).toEqual([cue]);
     expect(store.getState().takeCues()).toEqual([]);
     expect(store.getState().cues).toEqual([]);
+  });
+
+  it('update com baseRevision igual ao estado aplica sem resync, mesmo com salto de revisão, e mantém cues', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    await store.getState().connect(t, GM);
+    const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
+    t.push({ revision: 5, baseRevision: 0, changes: [{ kind: 'setName', name: 'Nova' }], cues: [cue] });
+    expect(t.resyncCalls).toBe(0);
+    expect(store.getState().state?.revision).toBe(5);
+    expect(store.getState().state?.name).toBe('Nova');
+    expect(store.getState().cues).toHaveLength(1);
+  });
+
+  it('update com baseRevision diferente do estado dispara resync', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    await store.getState().connect(t, GM);
+    t.push({ revision: 5, baseRevision: 3, changes: [], cues: [] });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(t.resyncCalls).toBe(1);
+  });
+
+  it('update com revisão já refletida é ignorado, sem resync', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    await store.getState().connect(t, GM);
+    const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
+    t.push({ revision: 0, baseRevision: 0, changes: [], cues: [cue] });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(t.resyncCalls).toBe(0);
+    expect(store.getState().cues).toEqual([]);
+  });
+
+  it('a fila de cues é limitada a 50, descartando os mais antigos', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    await store.getState().connect(t, GM);
+    for (let i = 1; i <= 60; i++) {
+      t.push({ revision: i, baseRevision: i - 1, changes: [], cues: [{ type: 'turn-started', tokenId: `t${i}`, round: i } satisfies Cue] });
+    }
+    const cues = store.getState().takeCues();
+    expect(cues).toHaveLength(50);
+    expect(cues[0]).toMatchObject({ round: 11 });
+    expect(cues[49]).toMatchObject({ round: 60 });
   });
 
   it('resync descarta os cues do update com lacuna', async () => {
@@ -76,7 +121,7 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
-    t.push({ revision: 5, changes: [], cues: [cue] });
+    t.push({ revision: 5, baseRevision: 4, changes: [], cues: [cue] });
     await new Promise((r) => setTimeout(r, 0));
     expect(t.resyncCalls).toBe(1);
     expect(store.getState().cues).toEqual([]);
@@ -89,8 +134,8 @@ describe('gameStore', () => {
     const snap = await t.resync();
     let release!: () => void;
     t.resync = () => new Promise((r) => { release = () => r(snap); });
-    t.push({ revision: 5, changes: [], cues: [] }); // inicia resync
-    t.push({ revision: 1, changes: [], cues: [{ type: 'turn-started', tokenId: 'x', round: 1 } satisfies Cue] });
+    t.push({ revision: 5, baseRevision: 4, changes: [], cues: [] }); // inicia resync
+    t.push({ revision: 1, baseRevision: 0, changes: [], cues: [{ type: 'turn-started', tokenId: 'x', round: 1 } satisfies Cue] });
     expect(store.getState().cues).toEqual([]);
     expect(store.getState().state?.revision).toBe(0);
     release();
@@ -103,7 +148,7 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     t.resync = async () => { throw new Error('x'); };
-    t.push({ revision: 9, changes: [], cues: [] });
+    t.push({ revision: 9, baseRevision: 8, changes: [], cues: [] });
     await new Promise((r) => setTimeout(r, 0));
     expect(store.getState().status).toBe('error');
   });
@@ -126,5 +171,29 @@ describe('gameStore', () => {
     expect(store.getState().state?.revision).toBe(0);
     expect(store.getState().state?.characters).toEqual({});
     expect(store.getState().cues).toEqual([]);
+  });
+
+  it('connect rejeitado com load_failed marca loadFailed; resetCampaign reconecta', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    const original = t.connect;
+    let fail = true;
+    t.connect = async (sess) => {
+      if (fail) throw new Error('load_failed');
+      return original(sess);
+    };
+    t.reset = () => { fail = false; };
+    await store.getState().connect(t, GM);
+    expect(store.getState()).toMatchObject({ status: 'error', loadFailed: true });
+    await store.getState().resetCampaign();
+    expect(store.getState()).toMatchObject({ status: 'ready', loadFailed: false });
+  });
+
+  it('connect rejeitado por outro motivo não marca loadFailed', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    t.connect = async () => { throw new Error('outro'); };
+    await store.getState().connect(t, GM);
+    expect(store.getState()).toMatchObject({ status: 'error', loadFailed: false });
   });
 });

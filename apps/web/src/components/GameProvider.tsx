@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router';
 import { useGame } from '../store/gameStore';
 import { createTransport, type Transport } from '../net/transport';
 import { clearSession, getSession } from '../session/session';
+import { LOAD_FAILED_MESSAGE } from '../i18n/errors';
+import { ResetCampaignButton } from './ResetCampaignButton';
 
 interface Props {
   children: ReactNode;
@@ -20,6 +22,7 @@ type Phase = 'connecting' | 'ready' | 'failed';
  */
 export function GameProvider({ children, transportFactory = createTransport }: Props) {
   const status = useGame((s) => s.status);
+  const loadFailed = useGame((s) => s.loadFailed);
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>('connecting');
 
@@ -51,7 +54,10 @@ export function GameProvider({ children, transportFactory = createTransport }: P
   if (phase === 'failed' || (phase === 'ready' && status === 'error')) {
     return (
       <div>
-        <p role="alert">Não foi possível conectar à mesa.</p>
+        <p role="alert">{loadFailed ? LOAD_FAILED_MESSAGE : 'Não foi possível conectar à mesa.'}</p>
+        {loadFailed && getSession()?.role === 'gm' && (
+          <ResetCampaignButton onDone={() => setPhase(useGame.getState().status === 'ready' ? 'ready' : 'failed')} />
+        )}
         <button
           type="button"
           onClick={() => {

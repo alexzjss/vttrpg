@@ -108,7 +108,7 @@ export function CharacterForm({ character, send, onDone }: Props) {
       </label>
       <label>
         Tipo
-        <select value={kind} onChange={(e) => setKind(e.target.value as Character['kind'])}>
+        <select value={kind} disabled={character !== undefined} onChange={(e) => setKind(e.target.value as Character['kind'])}>
           <option value="pc">Jogador</option>
           <option value="npc">NPC</option>
         </select>

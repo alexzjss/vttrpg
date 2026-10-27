@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Character, CampaignState } from '@vtt/core';
+import { createCampaign, type Character, type CampaignState } from '@vtt/core';
 import type { WorkerMessage } from './protocol';
-import { createWorkerHost } from './workerHost';
+import { createWorkerHost, isValidCampaign } from './workerHost';
 
 const GM = { role: 'gm' } as const;
 const mkChar = (kind: 'pc' | 'npc', name: string): Omit<Character, 'id'> => ({
@@ -95,15 +95,83 @@ describe('workerHost', () => {
     expect(gm.msgs[0]).toMatchObject({ t: 'snapshot', state: { revision: 0, characters: {} } });
   });
 
-  it('falha em load ainda responde ao connect com campanha nova', async () => {
-    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const store = { load: async () => { throw new Error('idb'); }, save: async () => {} };
-    const host = createWorkerHost(store, { newId: () => 'x' });
-    const msgs: WorkerMessage[] = [];
-    host.attach({ postMessage: (m) => msgs.push(m) })({ t: 'connect', reqId: 7, session: GM });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(msgs[0]).toMatchObject({ t: 'snapshot', reqId: 7, state: { revision: 0 } });
-    err.mockRestore();
+  describe('falha ao carregar', () => {
+    const quiet = () => vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failing = (load: () => Promise<CampaignState | undefined>) => {
+      const store = { load, save: vi.fn(async (_s: CampaignState) => {}) };
+      const host = createWorkerHost(store, { newId: () => 'x' });
+      const msgs: WorkerMessage[] = [];
+      const send = host.attach({ postMessage: (m) => msgs.push(m) });
+      return { store, msgs, send };
+    };
+    const wait = () => new Promise((r) => setTimeout(r, 0));
+
+    it('load que rejeita: connect, resync e comando recebem load_failed e nada é salvo', async () => {
+      const err = quiet();
+      const { store, msgs, send } = failing(async () => { throw new Error('idb'); });
+      send({ t: 'connect', reqId: 1, session: GM });
+      send({ t: 'resync', reqId: 2 });
+      send({ t: 'command', reqId: 3, cmd: { type: 'createCharacter', input: mkChar('pc', 'Ana') } });
+      await wait();
+      expect(msgs).toEqual([
+        { t: 'error', reqId: 1, message: 'load_failed' },
+        { t: 'error', reqId: 2, message: 'load_failed' },
+        { t: 'error', reqId: 3, message: 'load_failed' },
+      ]);
+      expect(store.save).not.toHaveBeenCalled();
+      err.mockRestore();
+    });
+
+    it('formato inválido também entra em modo de falha, sem sobrescrever', async () => {
+      const err = quiet();
+      const { store, msgs, send } = failing(async () => ({ revision: 'x' }) as unknown as CampaignState);
+      send({ t: 'connect', reqId: 1, session: GM });
+      await wait();
+      expect(msgs[0]).toEqual({ t: 'error', reqId: 1, message: 'load_failed' });
+      expect(store.save).not.toHaveBeenCalled();
+      err.mockRestore();
+    });
+
+    it('reset só vale para sessão de mestre; limpa o modo de falha e salva a campanha nova', async () => {
+      const err = quiet();
+      const { store, msgs, send } = failing(async () => { throw new Error('idb'); });
+      send({ t: 'reset' }); // sem sessão
+      send({ t: 'connect', reqId: 1, session: { role: 'player', characterId: 'p' } });
+      send({ t: 'reset' }); // jogador
+      await wait();
+      expect(store.save).not.toHaveBeenCalled();
+      send({ t: 'connect', reqId: 2, session: GM });
+      send({ t: 'reset' });
+      send({ t: 'connect', reqId: 3, session: GM });
+      await wait();
+      expect(store.save).toHaveBeenCalledTimes(1);
+      expect(msgs[msgs.length - 1]).toMatchObject({ t: 'snapshot', reqId: 3, state: { revision: 0 } });
+      err.mockRestore();
+    });
+  });
+
+  it('reset de jogador é ignorado', async () => {
+    const { mkPort, store, flush } = setup();
+    const p = mkPort();
+    p.send({ t: 'connect', reqId: 1, session: { role: 'player', characterId: 'x' } });
+    p.send({ t: 'reset' });
+    await flush();
+    expect(p.msgs.map((m) => m.t)).toEqual(['snapshot']);
+    expect(store.save).not.toHaveBeenCalled();
+  });
+
+  it('disconnect remove a porta: ela não recebe mais updates', async () => {
+    const { mkPort, flush } = setup();
+    const a = mkPort();
+    const b = mkPort();
+    a.send({ t: 'connect', reqId: 1, session: GM });
+    b.send({ t: 'connect', reqId: 1, session: GM });
+    await flush();
+    b.send({ t: 'disconnect' });
+    a.send({ t: 'command', reqId: 2, cmd: { type: 'createCharacter', input: mkChar('pc', 'Ana') } });
+    await flush();
+    expect(a.msgs.map((m) => m.t)).toEqual(['snapshot', 'result', 'update']);
+    expect(b.msgs.map((m) => m.t)).toEqual(['snapshot']);
   });
 
   it('falha em save não bloqueia result e updates', async () => {
@@ -156,5 +224,18 @@ describe('workerHost', () => {
     await flush();
     expect(p.msgs[0]).toMatchObject({ t: 'error', reqId: 4 });
     err.mockRestore();
+  });
+});
+
+describe('isValidCampaign', () => {
+  it('aceita uma campanha real e rejeita formatos quebrados', () => {
+    const ok = createCampaign('c', 'C');
+    expect(isValidCampaign(ok)).toBe(true);
+    expect(isValidCampaign(JSON.parse(JSON.stringify(ok)))).toBe(true);
+    for (const bad of [
+      null, 1, 'x', [], {}, { ...ok, revision: '1' }, { ...ok, characters: null },
+      { ...ok, scene: { ...ok.scene, grid: { cols: 1, rows: 1 } } }, { ...ok, scene: undefined },
+      { ...ok, scene: { ...ok.scene, tokens: undefined } }, { ...ok, encounter: undefined },
+    ]) expect(isValidCampaign(bad)).toBe(false);
   });
 });
