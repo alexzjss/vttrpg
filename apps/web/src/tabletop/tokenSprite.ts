@@ -65,7 +65,7 @@ export class TokenView extends Container {
     this.cursor = 'pointer';
     this.initialsText.anchor.set(0.5);
     this.nameText.anchor.set(0.5, 0);
-    this.body.addChild(this.glow, this.clip, this.initialsText, this.ring, this.arc, this.eye);
+    this.body.addChild(this.glow, this.initialsText, this.ring, this.arc, this.eye);
     this.addChild(this.body, this.nameText);
   }
 
@@ -132,6 +132,7 @@ export class TokenView extends Container {
       this.imageUrl = url;
       this.image?.destroy();
       this.image = null;
+      this.body.removeChild(this.clip);
       this.initialsText.visible = true;
       if (url) {
         void loadTexture(url).then((tex) => {
@@ -139,6 +140,7 @@ export class TokenView extends Container {
           const s = new Sprite(tex);
           s.anchor.set(0.5);
           s.mask = this.clip;
+          this.body.addChild(this.clip); // só entra na árvore junto com a imagem
           this.image = s;
           this.initialsText.visible = false;
           this.body.addChildAt(s, 2);

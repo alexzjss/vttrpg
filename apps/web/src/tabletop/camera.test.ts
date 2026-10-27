@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitGrid, pan, screenToWorld, worldToScreen, zoomAt } from './camera';
+import { fitGrid, hasArea, pan, screenToWorld, worldToScreen, zoomAt } from './camera';
 
 describe('camera', () => {
   it('zoomAt mantém o ponto mundial sob o cursor', () => {
@@ -30,5 +30,10 @@ describe('camera', () => {
     expect(c.x).toBeCloseTo(640, 6);
     expect(c.y).toBeCloseTo(360, 6);
     expect(cam.zoom).toBeLessThanOrEqual(720 / 768);
+  });
+  it('hasArea rejeita viewport vazio', () => {
+    expect(hasArea({ w: 0, h: 720 })).toBe(false);
+    expect(hasArea({ w: 1280, h: 0 })).toBe(false);
+    expect(hasArea({ w: 1280, h: 720 })).toBe(true);
   });
 });

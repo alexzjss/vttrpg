@@ -37,3 +37,8 @@ export function fitGrid(
   const zoom = clampZoom(Math.min(viewport.w / gw, viewport.h / gh) * 0.95);
   return { zoom, x: (viewport.w - gw * zoom) / 2, y: (viewport.h - gh * zoom) / 2 };
 }
+
+/** Viewport utilizável para enquadrar (ignora 0x0 antes do layout). */
+export function hasArea(viewport: { w: number; h: number }): boolean {
+  return viewport.w > 0 && viewport.h > 0;
+}

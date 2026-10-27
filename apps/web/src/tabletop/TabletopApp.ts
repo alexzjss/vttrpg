@@ -1,7 +1,7 @@
 import type { Cell, Cue, Id, ProjectedState } from '@vtt/core';
 import { Application, Container, type FederatedPointerEvent, Graphics, Sprite } from 'pixi.js';
 import type { Theme } from '../theme/themes';
-import { fitGrid, pan, screenToWorld, zoomAt, type Camera } from './camera';
+import { fitGrid, hasArea, pan, screenToWorld, zoomAt, type Camera } from './camera';
 import { clampCell, pxToCell } from './geometry';
 import { hex, loadTexture, tokenCenter, TokenView } from './tokenSprite';
 
@@ -37,6 +37,7 @@ export class TabletopApp {
   private bgUrl: string | null = null;
   private drag: Drag | null = null;
   private destroyed = false;
+  private userMoved = false;
 
   private constructor(private app: Application, private opts: TabletopOptions) {
     this.world.addChild(this.bgLayer, this.gridGfx, this.highlight, this.tokenLayer);
@@ -49,6 +50,7 @@ export class TabletopApp {
     app.stage.on('pointerupoutside', this.onUp);
     app.canvas.addEventListener('wheel', this.onWheel, { passive: false });
     app.ticker.add(this.tick);
+    app.renderer.on('resize', this.onResize);
   }
 
   static async create(host: HTMLElement, opts: TabletopOptions): Promise<TabletopApp> {
@@ -81,16 +83,16 @@ export class TabletopApp {
     this.state = state;
     const { grid } = state.scene;
     const key = `${grid.cols}x${grid.rows}x${grid.cellSize}`;
-    if (key !== this.fitKey) {
+    if (key !== this.fitKey && this.fit(grid)) {
       this.fitKey = key;
-      this.camera = fitGrid(grid, { w: this.app.screen.width, h: this.app.screen.height });
-      this.applyCamera();
+      this.userMoved = false;
     }
     this.drawGrid(state);
     this.syncBackground(state);
 
     const seen = new Set<Id>();
     for (const token of Object.values(state.scene.tokens)) {
+      if (token.hidden && !this.opts.gmView) continue;
       seen.add(token.id);
       let view = this.views.get(token.id);
       if (!view) {
@@ -144,6 +146,7 @@ export class TabletopApp {
     if (this.destroyed) return;
     this.destroyed = true;
     this.app.ticker.remove(this.tick);
+    this.app.renderer.off('resize', this.onResize);
     this.app.canvas.removeEventListener('wheel', this.onWheel);
     this.app.destroy({ removeView: true }, { children: true });
   }
@@ -170,6 +173,20 @@ export class TabletopApp {
         v.setPulse(1 + 0.25 * Math.sin(Math.PI * k));
       }
     }
+  };
+
+  private fit(grid: ProjectedState['scene']['grid']): boolean {
+    const viewport = { w: this.app.screen.width, h: this.app.screen.height };
+    if (!hasArea(viewport)) return false;
+    this.camera = fitGrid(grid, viewport);
+    this.applyCamera();
+    return true;
+  }
+
+  private onResize = (): void => {
+    if (this.destroyed || this.userMoved || !this.state) return;
+    this.fit(this.state.scene.grid);
+    if (this.fitKey === '') this.render(this.state);
   };
 
   private applyCamera(): void {
@@ -211,6 +228,7 @@ export class TabletopApp {
     e.preventDefault();
     const rect = this.app.canvas.getBoundingClientRect();
     const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    this.userMoved = true;
     this.camera = zoomAt(this.camera, e.deltaY < 0 ? 1.1 : 1 / 1.1, pt);
     this.applyCamera();
   };
@@ -234,6 +252,7 @@ export class TabletopApp {
       const dy = e.global.y - d.last.y;
       if (dx !== 0 || dy !== 0) d.moved = true;
       d.last = { x: e.global.x, y: e.global.y };
+      this.userMoved = true;
       this.camera = pan(this.camera, dx, dy);
       this.applyCamera();
       return;
