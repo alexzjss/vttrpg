@@ -204,3 +204,8 @@
   border-radius: 6px;
   z-index: 10;
 }
+
+.accounts-panel .form-error {
+  color: #c0392b;
+  margin: 0 0 0.5rem;
+}
