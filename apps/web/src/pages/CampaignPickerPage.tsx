@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
-import { createAuthedApi } from '../net/authedApi';
+import { ApiError } from '../net/api';
+import { createAuthedApi, type Me } from '../net/authedApi';
 import { setSession } from '../session/session';
 import { logout } from '../session/logout';
-import type { Me } from './OnlineLoginPage';
 
 interface CampaignItem {
   id: string;
@@ -58,8 +58,12 @@ export function CampaignPickerPage() {
         name: name.trim(),
       });
       enter(campaign.id);
-    } catch {
-      setError('Não foi possível criar a campanha. Use um nome de 1 a 80 caracteres.');
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 400
+          ? 'Use um nome de 1 a 80 caracteres.'
+          : 'Não foi possível criar a campanha agora.',
+      );
     }
   };
 

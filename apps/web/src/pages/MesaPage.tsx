@@ -5,8 +5,7 @@ import { ErrorToast, type Notice } from '../components/ErrorToast';
 import { errorMessage } from '../i18n/errors';
 import { TurnStrip } from '../mesa/TurnStrip';
 import '../mesa/mesa.css';
-import { logout } from '../session/logout';
-import { getSession } from '../session/session';
+import { clearSession, getSession } from '../session/session';
 import { useGame } from '../store/gameStore';
 import { Tabletop } from '../tabletop/Tabletop';
 import { defaultTheme } from '../theme/themes';
@@ -47,7 +46,7 @@ export function MesaPage() {
         onTokenDrop={(tokenId, to) => void move(tokenId, to)}
       />
       <TurnStrip state={state} />
-      <button type="button" className="mesa-leave" onClick={() => { void logout(); navigate('/login'); }}>Sair</button>
+      <button type="button" className="mesa-leave" onClick={() => { clearSession(); navigate('/login'); }}>Sair</button>
       <ErrorToast notice={notice} onDismiss={dismiss} />
     </div>
   );

@@ -64,11 +64,47 @@ describe('CampaignPickerPage', () => {
     expect(getSession()).toMatchObject({ mode: 'online', campaignId: 'nova-1' });
   });
 
+  it('player em /campanhas volta ao login sem listar campanhas', async () => {
+    mockApi([{ id: 'c-1', name: 'Eldoria' }]);
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (path: string) => {
+      calls.push({ method: 'GET', path });
+      return { ok: true, status: 200, json: async () => ({ ...ME, role: 'player' }) };
+    });
+    renderPicker();
+    expect(await screen.findByText('Tela de login')).toBeTruthy();
+    expect(calls.some((c) => c.path === '/api/campaigns')).toBe(false);
+    expect(screen.queryByText('Eldoria')).toBeNull();
+  });
+
+  it.each([[401], [0]])('falha em /api/me (%i) volta ao login', async (status) => {
+    calls = [];
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      if (status === 0) throw new TypeError('network');
+      return { ok: false, status, json: async () => ({ error: 'unauthorized' }) };
+    }));
+    renderPicker();
+    expect(await screen.findByText('Tela de login')).toBeTruthy();
+  });
+
+  it('nome inválido (400) mostra a dica de tamanho', async () => {
+    mockApi([]);
+    const base = global.fetch as ReturnType<typeof vi.fn>;
+    const impl = base.getMockImplementation()!;
+    base.mockImplementation(async (path: string, init: { method: string; body?: string }) =>
+      init.method === 'POST'
+        ? { ok: false, status: 400, json: async () => ({ error: 'invalid_name' }) }
+        : impl(path, init));
+    renderPicker();
+    fireEvent.change(await screen.findByLabelText('Nome da campanha'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Nova campanha' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Use um nome de 1 a 80 caracteres.');
+  });
+
   it('Sair encerra a sessão do Supabase e volta ao login', async () => {
     mockApi([]);
     renderPicker();
     fireEvent.click(await screen.findByRole('button', { name: 'Sair' }));
     expect(await screen.findByText('Tela de login')).toBeTruthy();
-    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
   });
 });
