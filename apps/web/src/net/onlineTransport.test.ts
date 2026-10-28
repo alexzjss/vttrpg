@@ -15,7 +15,7 @@ const player: Session = {
 };
 const STATE = { seq: 3 } as unknown as ProjectedState;
 
-function fakes(opts: { subscribeStatus?: string | null; token?: string | null } = {}) {
+function fakes(opts: { subscribeStatus?: string | null; token?: string | null; gate?: Promise<void> } = {}) {
   const log: string[] = [];
   let broadcast: ((m: { payload: unknown }) => void) | null = null;
   let authCb: ((event: string, s: { access_token: string } | null) => void) | null = null;
@@ -45,9 +45,12 @@ function fakes(opts: { subscribeStatus?: string | null; token?: string | null } 
     removeChannel,
     realtime: { setAuth },
     auth: {
-      getSession: vi.fn(async () => ({
+      getSession: vi.fn(async () => {
+        await opts.gate;
+        return {
         data: { session: opts.token === null ? null : { access_token: opts.token ?? 'tok1' } },
-      })),
+      };
+      }),
       onAuthStateChange: vi.fn((cb: typeof authCb) => {
         authCb = cb;
         return { data: { subscription: { unsubscribe } } };
@@ -149,5 +152,54 @@ describe('OnlineTransport', () => {
     t.close();
     expect(f.removeChannel).toHaveBeenCalledTimes(1);
     expect(f.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('entrega ao primeiro ouvinte o update que chegou durante o GET do estado', async () => {
+    const f = fakes();
+    const update = { seq: 4 } as unknown as ProjectedUpdate;
+    (f.api.get as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      f.emit(update);
+      return { state: STATE };
+    });
+    const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
+    await t.connect(gm);
+    const got: ProjectedUpdate[] = [];
+    t.onUpdate((u) => got.push(u));
+    expect(got).toEqual([update]);
+  });
+
+  it('close durante o connect não deixa canal nem ouvinte de auth', async () => {
+    let open!: () => void;
+    const f = fakes({ gate: new Promise<void>((r) => (open = r)) });
+    const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
+    const p = t.connect(gm);
+    t.close();
+    open();
+    await expect(p).rejects.toThrow();
+    expect(f.channelFn).not.toHaveBeenCalled();
+    expect(f.supabase.auth.onAuthStateChange).not.toHaveBeenCalled();
+  });
+
+  it('libera canal e auth quando o estado inicial falha', async () => {
+    const f = fakes();
+    (f.api.get as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('500'));
+    const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
+    await expect(t.connect(gm)).rejects.toThrow('500');
+    expect(f.removeChannel).toHaveBeenCalledTimes(1);
+    expect(f.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('close durante a assinatura cancela o timer de 10 s', async () => {
+    const f = fakes({ subscribeStatus: null });
+    const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
+    void t.connect(gm).catch(() => {});
+    await vi.advanceTimersByTimeAsync(0);
+    t.close();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('send antes de connect dá erro claro', () => {
+    const t = createOnlineTransport({ supabase: null });
+    expect(() => t.send({ type: 'nextTurn' } as never)).toThrow('antes de conectar');
   });
 });

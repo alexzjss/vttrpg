@@ -197,3 +197,14 @@ describe('gameStore', () => {
     expect(store.getState()).toMatchObject({ status: 'error', loadFailed: false });
   });
 });
+
+describe('gameStore send rejeitado', () => {
+  it('propaga a rejeição ao chamador e marca status error', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    await store.getState().connect(t, GM);
+    t.send = async () => { throw new Error('http 500'); };
+    await expect(store.getState().send({ type: 'nextTurn' } as never)).rejects.toThrow('http 500');
+    expect(store.getState().status).toBe('error');
+  });
+});
