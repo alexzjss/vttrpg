@@ -36,7 +36,7 @@ describe('LoginPage', () => {
     const lia = Object.values(t.authority.getState().characters)[0]!;
     renderLogin(t);
     fireEvent.click(await screen.findByRole('button', { name: 'Lia' }));
-    expect(getSession()).toEqual({ role: 'player', characterId: lia.id });
+    expect(getSession()).toEqual({ mode: 'local', actor: { role: 'player', characterId: lia.id } });
     expect(await screen.findByText('Tela do jogador')).toBeTruthy();
   });
 
@@ -50,7 +50,7 @@ describe('LoginPage', () => {
   it('Entrar como Mestre grava a sessão de gm', async () => {
     renderLogin(createFakeTransport());
     fireEvent.click(screen.getByRole('button', { name: 'Entrar como Mestre' }));
-    expect(getSession()).toEqual({ role: 'gm' });
+    expect(getSession()).toEqual({ mode: 'local', actor: { role: 'gm' } });
     expect(await screen.findByText('Tela do mestre')).toBeTruthy();
   });
 });

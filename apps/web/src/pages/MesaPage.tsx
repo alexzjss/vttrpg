@@ -25,13 +25,14 @@ export function MesaPage() {
 
   if (!state) return null;
   const session = getSession();
-  const isGm = session?.role === 'gm';
+  const isGm = session?.actor.role === 'gm';
 
   const canDrag = (tokenId: Id): boolean => {
     if (isGm) return true;
-    if (session?.role !== 'player') return false;
+    if (session?.actor.role !== 'player') return false;
+    const characterId = session.actor.characterId;
     const token = state.scene.tokens[tokenId];
-    if (!token || token.characterId !== session.characterId) return false;
+    if (!token || token.characterId !== characterId) return false;
     return !state.encounter.active || state.encounter.currentTokenId === tokenId;
   };
 

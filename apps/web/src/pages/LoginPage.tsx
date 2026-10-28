@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { createTransport, type Transport } from '../net/transport';
+import { createTransport, type Session, type Transport } from '../net/transport';
 import { setSession } from '../session/session';
 
 interface Props {
-  transportFactory?: () => Transport;
+  transportFactory?: (session: Session) => Transport;
 }
 
 type Pc = [id: string, name: string];
@@ -22,8 +22,9 @@ export function LoginPage({ transportFactory = createTransport }: Props) {
     // Aceitável só porque a campanha é local; na fase 2 a lista vira endpoint autenticado.
     (async () => {
       try {
-        transport = transportFactory();
-        const state = await transport.connect({ role: 'gm' });
+        const probe: Session = { mode: 'local', actor: { role: 'gm' } };
+        transport = transportFactory(probe);
+        const state = await transport.connect(probe);
         const list: Pc[] = Object.entries(state.characters)
           .filter(([, c]) => c.kind === 'pc')
           .map(([id, c]) => [id, c.name]);
@@ -40,12 +41,12 @@ export function LoginPage({ transportFactory = createTransport }: Props) {
   }, [transportFactory]);
 
   const enterAsGm = () => {
-    if (!setSession({ role: 'gm' })) return setSaveFailed(true);
+    if (!setSession({ mode: 'local', actor: { role: 'gm' } })) return setSaveFailed(true);
     navigate('/mestre');
   };
 
   const enterAsPlayer = (characterId: string) => {
-    if (!setSession({ role: 'player', characterId })) return setSaveFailed(true);
+    if (!setSession({ mode: 'local', actor: { role: 'player', characterId } })) return setSaveFailed(true);
     navigate('/jogador');
   };
 

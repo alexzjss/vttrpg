@@ -3,7 +3,7 @@ import { createCampaign, type Cue } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
 import { createGameStore } from './gameStore';
 
-const GM = { role: 'gm' } as const;
+const GM = { mode: 'local', actor: { role: 'gm' } } as const;
 const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
 
 /** Atrasa o connect até release() ser chamado; depois segue o comportamento original. */

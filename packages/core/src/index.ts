@@ -13,3 +13,4 @@ export * from './diff';
 export * from './cues';
 export * from './authority';
 export * from './importLegacy';
+export * from './topics';

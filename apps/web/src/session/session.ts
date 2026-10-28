@@ -1,12 +1,22 @@
+import type { Actor } from '@vtt/core';
 import type { Session } from '../net/transport';
 
 const KEY = 'vtt.session'; // sessionStorage: cada aba tem a sua sessão
 
+function isActor(v: unknown): v is Actor {
+  if (typeof v !== 'object' || v === null) return false;
+  const a = v as { role?: unknown; characterId?: unknown };
+  if (a.role === 'gm') return true;
+  return a.role === 'player' && typeof a.characterId === 'string';
+}
+
+// Formato antigo da Fase 1 ({role}) cai em false: a pessoa entra de novo.
 function isSession(v: unknown): v is Session {
   if (typeof v !== 'object' || v === null) return false;
-  const s = v as { role?: unknown; characterId?: unknown };
-  if (s.role === 'gm') return true;
-  return s.role === 'player' && typeof s.characterId === 'string';
+  const s = v as { mode?: unknown; actor?: unknown; campaignId?: unknown; username?: unknown };
+  if (!isActor(s.actor)) return false;
+  if (s.mode === 'local') return true;
+  return s.mode === 'online' && typeof s.campaignId === 'string' && typeof s.username === 'string';
 }
 
 export function getSession(): Session | null {

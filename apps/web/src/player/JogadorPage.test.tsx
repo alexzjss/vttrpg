@@ -17,7 +17,7 @@ const res = (hp: number, hpMax: number) => ({
 /** Mesa com Lia (PJ 15/20), Bran (PJ 8/10) e um Goblin oculto. Devolve os ids e a instância. */
 async function campaign() {
   const fake = createFakeTransport();
-  await fake.connect({ role: 'gm' });
+  await fake.connect({ mode: 'local', actor: { role: 'gm' } });
   const inputs = [
     { kind: 'pc', name: 'Lia', hpVisibility: 'exact', resources: res(15, 20) },
     { kind: 'pc', name: 'Bran', hpVisibility: 'exact', resources: res(8, 10) },
@@ -38,7 +38,7 @@ async function campaign() {
 }
 
 async function joinAs(fake: ReturnType<typeof createFakeTransport>, characterId: Id) {
-  const session = { role: 'player', characterId } as const;
+  const session = { mode: 'local', actor: { role: 'player', characterId } } as const;
   setSession(session);
   await useGame.getState().connect(fake, session);
 }

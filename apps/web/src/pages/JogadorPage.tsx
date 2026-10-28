@@ -28,7 +28,7 @@ export function JogadorPage() {
 
   if (!state) return null;
   const session = getSession();
-  const meId: Id | null = session?.role === 'player' ? session.characterId : null;
+  const meId: Id | null = session?.actor.role === 'player' ? session.actor.characterId : null;
   const me = meId ? state.characters[meId] : undefined;
 
   const leave = () => {

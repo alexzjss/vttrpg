@@ -12,7 +12,7 @@ const mk = (kind: 'pc' | 'npc', name: string): Omit<Character, 'id'> => ({
 describe('CharacterList', () => {
   it('"Colocar na cena" põe NPC oculto e PC visível', async () => {
     const fake = createFakeTransport();
-    await fake.connect({ role: 'gm' });
+    await fake.connect({ mode: 'local', actor: { role: 'gm' } });
     await fake.send({ type: 'createCharacter', input: mk('pc', 'Ana') });
     await fake.send({ type: 'createCharacter', input: mk('npc', 'Orc') });
     fake.sent.length = 0;

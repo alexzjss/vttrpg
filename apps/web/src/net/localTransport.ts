@@ -51,7 +51,7 @@ export function createLocalTransport(): Transport {
     });
 
   return {
-    connect: (session: Session) => awaitSnapshot((reqId) => ({ t: 'connect', reqId, session })),
+    connect: (session: Session) => awaitSnapshot((reqId) => ({ t: 'connect', reqId, session: session.actor })),
     resync: () => awaitSnapshot((reqId) => ({ t: 'resync', reqId })),
     onUpdate(listener) {
       listeners.add(listener);

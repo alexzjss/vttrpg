@@ -3,7 +3,7 @@ import type { Character, Cue } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
 import { createGameStore } from './gameStore';
 
-const GM = { role: 'gm' } as const;
+const GM = { mode: 'local', actor: { role: 'gm' } } as const;
 const mkChar = (name: string): Omit<Character, 'id'> => ({
   kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, hpVisibility: 'exact',
   resources: { hp: { current: 10, max: 10 }, aura: { current: 5, max: 5 }, ammo: { current: 0, max: 0 } },
@@ -41,8 +41,8 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     // o servidor avança sem que o store veja o primeiro update
-    t.authority.handle(GM, { type: 'createCharacter', input: mkChar('Ana') });
-    const out = t.authority.handle(GM, { type: 'createCharacter', input: mkChar('Bia') });
+    t.authority.handle(GM.actor, { type: 'createCharacter', input: mkChar('Ana') });
+    const out = t.authority.handle(GM.actor, { type: 'createCharacter', input: mkChar('Bia') });
     t.push(out.updates[0]!.update); // seq 2, store em 0
     await new Promise((r) => setTimeout(r, 0));
     expect(t.resyncCalls).toBe(1);

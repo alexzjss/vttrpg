@@ -8,7 +8,7 @@ const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 3 };
 
 async function setup() {
   const fake = createFakeTransport();
-  const state = await fake.connect({ role: 'gm' });
+  const state = await fake.connect({ mode: 'local', actor: { role: 'gm' } });
   for (const name of ['Ana', 'Bruno']) {
     await fake.send({
       type: 'createCharacter',

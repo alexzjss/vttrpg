@@ -1,13 +1,13 @@
 import {
   Authority,
   actorAudience,
+  type Actor,
   audienceKey,
   createCampaign,
   type Audience,
   type CampaignState,
 } from '@vtt/core';
 import { LOAD_FAILED, type ClientMessage, type WorkerMessage } from './protocol';
-import type { Session } from './transport';
 
 export interface CampaignStore {
   load(): Promise<CampaignState | undefined>;
@@ -16,7 +16,7 @@ export interface CampaignStore {
 export interface HostPort { postMessage(m: WorkerMessage): void }
 export interface HostDeps { newId?: () => string }
 
-interface PortEntry { port: HostPort; session: Session | null; audience: Audience | null }
+interface PortEntry { port: HostPort; session: Actor | null; audience: Audience | null }
 
 const newCampaign = () => createCampaign('local', 'Campanha local');
 

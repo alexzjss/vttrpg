@@ -43,7 +43,7 @@ describe('CharacterForm', () => {
 
   it('editar envia só o que mudou', async () => {
     const fake = createFakeTransport();
-    await fake.connect({ role: 'gm' });
+    await fake.connect({ mode: 'local', actor: { role: 'gm' } });
     const { id: _id, ...input } = existing;
     await fake.send({ type: 'createCharacter', input: { ...input, resources: defaultResources() } });
     const characterId = Object.keys(fake.authority.getState().characters)[0]!;

@@ -7,17 +7,17 @@ import { MestrePage } from './pages/MestrePage';
 import { JogadorPage } from './pages/JogadorPage';
 import { MesaPage } from './pages/MesaPage';
 import { getSession } from './session/session';
-import type { Transport } from './net/transport';
+import type { Session, Transport } from './net/transport';
 
 function HomeRedirect() {
   const session = getSession();
   if (!session) return <Navigate to="/login" replace />;
-  return <Navigate to={session.role === 'gm' ? '/mestre' : '/jogador'} replace />;
+  return <Navigate to={session.actor.role === 'gm' ? '/mestre' : '/jogador'} replace />;
 }
 
 interface Props {
   /** Só para testes: troca o transporte padrão (SharedWorker). */
-  transportFactory?: () => Transport;
+  transportFactory?: (session: Session) => Transport;
 }
 
 export function AppRoutes({ transportFactory }: Props) {

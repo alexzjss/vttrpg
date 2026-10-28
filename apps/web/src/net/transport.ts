@@ -1,7 +1,10 @@
 import type { Actor, Command, CommandResult, ProjectedState, ProjectedUpdate } from '@vtt/core';
 import { createLocalTransport } from './localTransport';
+import { createOnlineTransport } from './onlineTransport';
 
-export type Session = Actor; // fase 2 troca por sessão autenticada
+export type Session =
+  | { mode: 'local'; actor: Actor }
+  | { mode: 'online'; actor: Actor; campaignId: string; username: string };
 
 export interface Transport {
   connect(session: Session): Promise<ProjectedState>;
@@ -14,7 +17,7 @@ export interface Transport {
   close(): void;
 }
 
-/** Fase 1: sempre local (SharedWorker). */
-export function createTransport(): Transport {
-  return createLocalTransport();
+/** Local (SharedWorker) ou online (Supabase Realtime + HTTP), conforme a sessão. */
+export function createTransport(session: Session): Transport {
+  return session.mode === 'online' ? createOnlineTransport() : createLocalTransport();
 }

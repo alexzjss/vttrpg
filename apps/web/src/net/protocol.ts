@@ -1,11 +1,11 @@
 import type { Command, CommandResult, ProjectedState, ProjectedUpdate } from '@vtt/core';
-import type { Session } from './transport';
+import type { Actor } from '@vtt/core';
 
 /** Mensagem de erro do worker quando a campanha salva não pôde ser lida. */
 export const LOAD_FAILED = 'load_failed';
 
 export type ClientMessage =
-  | { t: 'connect'; reqId: number; session: Session }
+  | { t: 'connect'; reqId: number; session: Actor }
   | { t: 'command'; reqId: number; cmd: Command }
   | { t: 'resync'; reqId: number }
   | { t: 'reset' }
