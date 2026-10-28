@@ -1,4 +1,4 @@
-/** Redimensiona a imagem (lado maior até maxSide) e devolve um data URL WebP. Fase 2 troca por upload. */
+/** Redimensiona a imagem (lado maior até maxSide) e devolve um data URL WebP. O modo online usa o upload (net/imageSink). */
 export function readImageFile(file: File, maxSide = 1024): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);

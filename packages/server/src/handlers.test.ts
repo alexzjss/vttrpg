@@ -3,6 +3,7 @@ import { createCampaign, defaultResources, type Character, type CampaignState } 
 import type { Identity } from './auth';
 import type { AuthAdmin } from './authAdmin';
 import { slugFromName } from './handlers/campaigns';
+import type { AssetRow, AssetsDep } from './assetsRepo';
 import type { ApiRequest, ServerDeps } from './http';
 import { MemoryStore } from './memoryStore';
 import type { AccountRow, AccountsRepo, CampaignRow, CampaignsRepo } from './repos';
@@ -78,11 +79,18 @@ function world() {
     };
     return who;
   };
+  const assetRows: AssetRow[] = [];
+  const assets: AssetsDep = {
+    insert: async (row) => { assetRows.push(row); },
+    usage: async (c) => assetRows.filter((r) => r.campaignId === c).reduce((sum, r) => sum + r.bytes, 0),
+    createSignedUploadUrl: async (path) => ({ token: `tok:${path}` }),
+    publicUrl: (path) => `http://fake/public/${path}`,
+  };
   const deps: ServerDeps = {
     env: { SUPABASE_URL: 'http://fake', SUPABASE_SECRET_KEY: 'k', SETUP_TOKEN: 'tok-123' },
-    store, identify, admin, db, newId: () => `id${++n}`,
+    store, identify, admin, db, assets, newId: () => `id${++n}`,
   };
-  return { deps, accounts, campaigns, snapshots, adminCalls, users, reservedSlugs, store, forced };
+  return { deps, assetRows, accounts, campaigns, snapshots, adminCalls, users, reservedSlugs, store, forced };
 }
 
 const call = (
@@ -358,5 +366,49 @@ describe('payloads malformados', () => {
     });
     expect(res).toEqual({ status: 409, body: { error: 'already_setup' } });
     expect(w.adminCalls).toEqual(['del:user-1']);
+  });
+});
+
+describe('assets', () => {
+  const upload = (deps: ServerDeps, as: string | null, body: unknown) =>
+    call(deps, 'POST', '/api/assets/upload-url', as, { body });
+
+  it('GM recebe path, token e URL pública, e a linha é gravada', async () => {
+    const w = world();
+    const res = await upload(w.deps, GM_ID, { campaignId: C1, contentType: 'image/webp', bytes: 1000 });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      path: `${C1}/id1.webp`, token: `tok:${C1}/id1.webp`, publicUrl: `http://fake/public/${C1}/id1.webp`,
+    });
+    expect(w.assetRows).toEqual([{ id: 'id1', campaignId: C1, path: `${C1}/id1.webp`, kind: 'image', bytes: 1000 }]);
+  });
+
+  it('rejeita image/gif e 2 MB com bad_asset, sem gravar', async () => {
+    const w = world();
+    const gif = await upload(w.deps, GM_ID, { campaignId: C1, contentType: 'image/gif', bytes: 1000 });
+    const big = await upload(w.deps, GM_ID, { campaignId: C1, contentType: 'image/png', bytes: 2_000_000 });
+    expect(gif).toEqual({ status: 400, body: { error: 'bad_asset' } });
+    expect(big).toEqual({ status: 400, body: { error: 'bad_asset' } });
+    expect(w.assetRows).toEqual([]);
+  });
+
+  it('campanha inválida dá bad_campaign; jogador 403; sem token 401', async () => {
+    const { deps } = world();
+    const ok = { contentType: 'image/png', bytes: 10 };
+    expect(await upload(deps, GM_ID, { ...ok, campaignId: 'x' })).toEqual({ status: 400, body: { error: 'bad_campaign' } });
+    expect((await upload(deps, ANA_ID, { ...ok, campaignId: C1 })).status).toBe(403);
+    expect((await upload(deps, null, { ...ok, campaignId: C1 })).status).toBe(401);
+  });
+
+  it('usage soma os bytes da campanha; só GM', async () => {
+    const w = world();
+    await upload(w.deps, GM_ID, { campaignId: C1, contentType: 'image/png', bytes: 100 });
+    await upload(w.deps, GM_ID, { campaignId: C1, contentType: 'image/jpeg', bytes: 250 });
+    await upload(w.deps, GM_ID, { campaignId: C2, contentType: 'image/jpeg', bytes: 999 });
+    const get = (as: string, campaignId: string) =>
+      call(w.deps, 'GET', '/api/assets/usage', as, { query: { campaignId } });
+    expect(await get(GM_ID, C1)).toEqual({ status: 200, body: { bytes: 350 } });
+    expect((await get(ANA_ID, C1)).status).toBe(403);
+    expect((await get(GM_ID, 'x')).status).toBe(400);
   });
 });

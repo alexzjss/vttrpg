@@ -5,6 +5,7 @@ import { state } from './handlers/state';
 import { command } from './handlers/command';
 import { listCampaigns, createCampaignHandler } from './handlers/campaigns';
 import { listAccounts, createAccount, patchAccount } from './handlers/accounts';
+import { uploadUrl, usage } from './handlers/assets';
 import { setup } from './handlers/setup';
 
 const routes: Record<string, Handler> = {
@@ -17,6 +18,8 @@ const routes: Record<string, Handler> = {
   'GET /api/accounts': listAccounts,
   'POST /api/accounts': createAccount,
   'PATCH /api/accounts': patchAccount,
+  'POST /api/assets/upload-url': uploadUrl,
+  'GET /api/assets/usage': usage,
   'POST /api/setup': setup,
 };
 

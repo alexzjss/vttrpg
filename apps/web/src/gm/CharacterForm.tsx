@@ -1,6 +1,6 @@
 import { defaultResources, type Character, type HpVisibility, type ProjectedCharacter, type ResourceKey } from '@vtt/core';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { readImageFile } from './imageInput';
+import { useImageSink } from '../net/ImageSinkContext';
 import type { Send } from './types';
 
 interface Props {
@@ -38,6 +38,7 @@ export function CharacterForm({ character, send, onDone }: Props) {
     aura: String(initialResources.aura.max),
     ammo: String(initialResources.ammo.max),
   });
+  const sink = useImageSink();
   const [imageError, setImageError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,7 +46,7 @@ export function CharacterForm({ character, send, onDone }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const url = await readImageFile(file);
+      const url = await sink(file);
       setImages((prev) => ({ ...prev, [key]: url }));
       setImageError(null);
     } catch {

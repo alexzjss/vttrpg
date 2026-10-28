@@ -1,4 +1,5 @@
 import { createAccountsRepo, createCampaignsRepo } from './repos';
+import { createAssetsDep } from './assetsRepo';
 import { createAuthAdmin } from './authAdmin';
 import { createIdentify } from './auth';
 import { createServiceClient } from './supabaseClient';
@@ -17,7 +18,7 @@ export function createDeps(env: ServerEnv): ServerDeps {
   const newId = () => crypto.randomUUID();
   if (!(env.SUPABASE_URL && env.SUPABASE_SECRET_KEY)) {
     const stub = new Proxy({}, { get: () => unconfigured }) as never;
-    return { env, store: stub, identify: unconfigured, admin: stub, db: stub, newId };
+    return { env, store: stub, identify: unconfigured, admin: stub, db: stub, assets: stub, newId };
   }
   const client = createServiceClient(env);
   const accounts = createAccountsRepo(client);
@@ -28,6 +29,7 @@ export function createDeps(env: ServerEnv): ServerDeps {
     identify: createIdentify(client, accounts),
     admin: createAuthAdmin(client),
     db: { ...accounts, ...campaigns },
+    assets: createAssetsDep(client),
     newId,
   };
 }

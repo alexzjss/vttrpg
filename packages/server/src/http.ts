@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { AuthAdmin } from './authAdmin';
 import type { IdentifyFn } from './auth';
+import type { AssetsDep } from './assetsRepo';
 import type { AccountsRepo, CampaignsRepo } from './repos';
 import type { CampaignStore } from './store';
 
@@ -30,6 +31,7 @@ export interface ServerDeps {
   identify: IdentifyFn;
   admin: AuthAdmin;
   db: AccountsRepo & CampaignsRepo;
+  assets: AssetsDep;
   newId: () => string;
 }
 
