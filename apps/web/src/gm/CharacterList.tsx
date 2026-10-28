@@ -7,10 +7,11 @@ interface Props {
   state: ProjectedState;
   send: Send;
   onNew(): void;
+  onImport(): void;
   onEdit(characterId: Id): void;
 }
 
-export function CharacterList({ state, send, onNew, onEdit }: Props) {
+export function CharacterList({ state, send, onNew, onImport, onEdit }: Props) {
   const [error, setError] = useState<string | null>(null);
   const all = Object.values(state.characters);
   const onScene = new Set(Object.values(state.scene.tokens).map((t) => t.characterId));
@@ -48,6 +49,7 @@ export function CharacterList({ state, send, onNew, onEdit }: Props) {
   return (
     <div className="character-list">
       <button type="button" onClick={onNew}>Novo personagem</button>
+      <button type="button" onClick={onImport}>Importar do legado</button>
       {error && <p role="alert" className="local-error">{error}</p>}
       {group('Jogadores', all.filter((c) => c.kind === 'pc'))}
       {group('NPCs', all.filter((c) => c.kind === 'npc'))}

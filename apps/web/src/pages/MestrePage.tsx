@@ -6,6 +6,7 @@ import { ErrorToast, type Notice } from '../components/ErrorToast';
 import { AccountsPanel } from '../gm/AccountsPanel';
 import { CharacterForm } from '../gm/CharacterForm';
 import { CharacterList } from '../gm/CharacterList';
+import { ImportPanel } from '../gm/ImportPanel';
 import { EncounterPanel } from '../gm/EncounterPanel';
 import { ScenePanel } from '../gm/ScenePanel';
 import { TokenPanel } from '../gm/TokenPanel';
@@ -32,7 +33,7 @@ export function MestrePage() {
   const state = useGame((s) => s.state);
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('personagens');
-  const [editing, setEditing] = useState<Id | 'new' | null>(null);
+  const [editing, setEditing] = useState<Id | 'new' | 'import' | null>(null);
   const [selected, setSelected] = useState<Id | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const counter = useRef(0);
@@ -46,7 +47,7 @@ export function MestrePage() {
   const dismiss = useCallback(() => setNotice(null), []);
 
   if (!state) return null;
-  const editingCharacter = editing && editing !== 'new' ? state.characters[editing] : undefined;
+  const editingCharacter = editing && editing !== 'new' && editing !== 'import' ? state.characters[editing] : undefined;
 
   return (
     <div className="gm-page">
@@ -66,10 +67,12 @@ export function MestrePage() {
               onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
-        {tab === 'personagens' && (editing === 'new' || editingCharacter ? (
+        {tab === 'personagens' && (editing === 'import' ? (
+          <ImportPanel send={send} onDone={() => setEditing(null)} />
+        ) : editing === 'new' || editingCharacter ? (
           <CharacterForm key={editing} character={editingCharacter} send={send} onDone={() => setEditing(null)} />
         ) : (
-          <CharacterList state={state} send={send} onNew={() => setEditing('new')} onEdit={setEditing} />
+          <CharacterList state={state} send={send} onNew={() => setEditing('new')} onImport={() => setEditing('import')} onEdit={setEditing} />
         ))}
         {tab === 'cena' && <ScenePanel state={state} send={send} />}
         {tab === 'encontro' && <EncounterPanel state={state} send={send} />}

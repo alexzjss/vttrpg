@@ -17,7 +17,7 @@ describe('CharacterList', () => {
     await fake.send({ type: 'createCharacter', input: mk('npc', 'Orc') });
     fake.sent.length = 0;
     const state = await fake.resync();
-    render(<CharacterList state={state} send={(c) => fake.send(c)} onNew={() => {}} onEdit={() => {}} />);
+    render(<CharacterList state={state} send={(c) => fake.send(c)} onNew={() => {}} onImport={() => {}} onEdit={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Colocar Orc na cena' }));
     fireEvent.click(screen.getByRole('button', { name: 'Colocar Ana na cena' }));
     await waitFor(() => expect(fake.sent).toHaveLength(2));
