@@ -128,6 +128,95 @@ describe('AccountsPanel', () => {
   });
 });
 
+describe('AccountsPanel: robustez', () => {
+  afterEach(cleanup);
+
+  it('falha no uso não esvazia a lista nem dispara alerta', async () => {
+    const { state, ana } = await setup();
+    const api = fakeApi();
+    api.get.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/assets/usage')) throw new ApiError(500, 'boom');
+      return { accounts: [{ id: 'a1', username: 'ana', characterId: ana.id, active: true }] };
+    });
+    render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
+    await screen.findByText('ana');
+    expect(await screen.findByText('Uso do armazenamento indisponível.')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('conta desativada continua excluindo o seu PC do select', async () => {
+    const { state, ana } = await setup();
+    const api = fakeApi([{ id: 'a1', username: 'ana', characterId: ana.id, active: false }]);
+    render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
+    await screen.findByText('ana');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Beto']);
+  });
+
+  it('falha ao atualizar a lista após ação bem-sucedida não vira alerta de erro', async () => {
+    const { state, ana } = await setup();
+    const api = fakeApi([{ id: 'a1', username: 'ana', characterId: ana.id, active: true }]);
+    render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Desativar ana' }));
+    api.get.mockImplementation(async () => { throw new ApiError(500, 'x'); });
+    await waitFor(() => expect(api.patch).toHaveBeenCalled());
+    expect((await screen.findByRole('status')).textContent).toBe('Feito, mas não foi possível atualizar a lista.');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('normaliza o usuário, recusa vazio e limpa a senha após enviar', async () => {
+    const { state, ana } = await setup();
+    const api = fakeApi();
+    render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
+    await screen.findByText('Nenhuma conta ainda.');
+    fill('   ', 'segredo1');
+    fireEvent.click(screen.getByRole('button', { name: 'Criar conta' }));
+    expect(api.post).not.toHaveBeenCalled();
+    fill('  Ana  ', 'segredo1');
+    api.post.mockRejectedValueOnce(new ApiError(409, 'username_taken'));
+    fireEvent.click(screen.getByRole('button', { name: 'Criar conta' }));
+    await screen.findByRole('alert');
+    expect(api.post).toHaveBeenCalledWith('/api/accounts', {
+      campaignId: 'c-1', username: 'ana', password: 'segredo1', characterId: ana.id,
+    });
+    expect((screen.getByLabelText('Senha') as HTMLInputElement).value).toBe('');
+  });
+
+  it('redefinir senha com sucesso mostra confirmação', async () => {
+    const { state, ana } = await setup();
+    const api = fakeApi([{ id: 'a1', username: 'ana', characterId: ana.id, active: true }]);
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('novasenha');
+    render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Redefinir senha de ana' }));
+    expect((await screen.findByRole('status')).textContent).toBe('Senha redefinida.');
+    prompt.mockRestore();
+  });
+
+  it('ignora resposta antiga que chega depois da mais nova', async () => {
+    const { state, ana } = await setup();
+    const acc = { id: 'a1', username: 'ana', characterId: ana.id, active: true };
+    const api = fakeApi();
+    let releaseFirst!: () => void;
+    let calls = 0;
+    api.get.mockImplementation(async (path: string) => {
+      if (!path.startsWith('/api/accounts')) return { bytes: 0 };
+      if (++calls === 1) {
+        await new Promise<void>((r) => { releaseFirst = r; });
+        return { accounts: [] };
+      }
+      return { accounts: [acc] };
+    });
+    render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
+    await waitFor(() => expect(releaseFirst).toBeTypeOf('function'));
+    fill('ana', 'segredo1');
+    fireEvent.click(screen.getByRole('button', { name: 'Criar conta' }));
+    await screen.findByText('ana');
+    releaseFirst();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByText('ana')).toBeTruthy();
+    expect(screen.queryByText('Nenhuma conta ainda.')).toBeNull();
+  });
+});
+
 describe('MestrePage: aba Contas', () => {
   beforeEach(() => sessionStorage.clear());
   afterEach(() => { cleanup(); useGame.getState().disconnect(); });
