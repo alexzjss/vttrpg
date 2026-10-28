@@ -104,10 +104,10 @@ Observações:
 - Para gerar o `SETUP_TOKEN`, use um texto longo e aleatório. No PowerShell, este comando gera um bom valor:
 
   ```powershell
-  [Convert]::ToBase64String((1..48 | % {Get-Random -Max 256}) -as [byte[]])
+  $b = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
   ```
 
-  Você também pode usar o gerador de senhas do seu gerenciador de senhas (por exemplo, 1Password, Bitwarden ou o do navegador), com 40 caracteres ou mais.
+  Esse comando usa o gerador criptográfico do Windows e funciona no Windows PowerShell 5.1. Você também pode usar o gerador de senhas do seu gerenciador de senhas (por exemplo, 1Password, Bitwarden ou o do navegador), com 40 caracteres ou mais.
 
 Esse arquivo **nunca vai para o git**: ele já está listado no `.gitignore`, então o Git o ignora. Não envie esse arquivo por e-mail, WhatsApp ou Discord.
 
@@ -137,7 +137,9 @@ Regras para o nome de usuário e a senha:
 
 Antes de começar, confira se o servidor está no ar: abra no navegador `<sua-url>/api/health`. Deve aparecer uma resposta de confirmação.
 
-### Opção A: curl (Mac, Linux ou Windows com curl)
+### Opção A: curl (Mac, Linux ou Git Bash)
+
+No Windows, use a **Opção B**: no PowerShell, `curl` é outro comando e não aceita essa sintaxe.
 
 ```bash
 curl -X POST <sua-url>/api/setup \
@@ -159,9 +161,11 @@ Invoke-RestMethod -Uri '<sua-url>/api/setup' -Method Post -ContentType 'applicat
 
 Use o mesmo valor de `SETUP_TOKEN` que você cadastrou no Passo 5 e na Vercel.
 
+Se algo der errado, o PowerShell mostra o erro em texto vermelho, com o código de resposta (403, 409 ou 400). A lista **Possíveis respostas**, logo abaixo, explica cada um.
+
 ### Possíveis respostas
 
-- **Sucesso**: o servidor responde confirmando que o mestre foi criado.
+- **Sucesso**: o servidor responde `{"ok": true, "username": "<nome>"}`, com o nome do mestre criado.
 - **403**: o `token` está errado. Confira se é exatamente o valor de `SETUP_TOKEN`.
 - **409 `already_setup`**: já existe um mestre. Esse endpoint funciona apenas uma vez. Não é preciso repetir a etapa.
 - **Erro de validação**: confira o nome de usuário e a senha, seguindo as regras acima.
@@ -177,6 +181,8 @@ Depois de criar o mestre, troque o `SETUP_TOKEN` por um novo valor aleatório, o
 3. No seu `.env.local`, faça a mesma alteração.
 
 O endpoint já fica bloqueado depois do primeiro mestre, mas trocar o token é uma camada extra de segurança.
+
+Se você **remover** o `SETUP_TOKEN` da Vercel, a chamada a `/api/setup` passa a responder **403** em vez de 409. Isso é esperado: sem o token configurado, nenhuma chamada é aceita.
 
 ---
 
@@ -198,20 +204,26 @@ Este teste confirma que o fluxo básico está funcionando.
 
 Este teste confirma que o jogador não consegue ver o que é só do mestre, como NPCs ocultos.
 
-1. Com a conta do jogador aberta na janela anônima, abra o **DevTools** (tecla `F12`) e vá para a aba **Network** (Rede), filtrando por **WS** (WebSocket).
-2. Confira que **não aparecem NPCs ocultos** nas mensagens recebidas.
-3. Na aba **Console**, tente se inscrever no canal da campanha no modo mestre (`campaign:<id>:gm`) usando o token do jogador. O servidor deve **recusar** a inscrição.
+1. Na janela anônima, com a conta do jogador já logada e a mesa aberta, pressione `F12` para abrir o **DevTools** (no Chrome ou no Edge).
+2. Clique na aba **Rede** (Network). Em seguida, clique no filtro **WS** (WebSocket) e recarregue a página com `F5`.
+3. Clique na conexão cujo endereço contém `realtime` (ela aparece com o endereço do seu projeto Supabase). Abra a subaba **Mensagens** (Messages) e role a lista de mensagens recebidas.
+4. Confira que **não aparece nenhum nome, posição ou identificador de NPC oculto**. Se o mestre tiver um NPC escondido, procure pelo nome dele usando a busca do DevTools (`Ctrl+F`): o resultado deve ser **zero**.
 
 Se algum NPC oculto aparecer para o jogador, **não use o modo online com jogadores** até o problema ser corrigido.
+
+### Verificação avançada (opcional, para quem é técnico)
+
+Esta verificação é opcional; o assistente vai executá-la durante o teste de ponta a ponta. Na aba **Console** do DevTools da conta do jogador, tente se inscrever no canal da campanha no modo mestre (`campaign:<id>:gm`) usando o token do jogador. O servidor deve **recusar** a inscrição.
 
 ---
 
 ## Passo 10: desativar a conta de um jogador
 
 1. Entre como mestre.
-2. Vá até a conta do jogador e desative-a.
-3. Volte à janela anônima e tente qualquer ação com a conta do jogador.
-4. A ação deve **falhar**.
+2. Vá em **Mestre → Contas** e clique no botão **Desativar**, ao lado do nome do jogador.
+3. Confira que o status da conta mudou para **desativada**.
+4. Volte à janela anônima e tente qualquer ação com a conta do jogador.
+5. A ação deve **falhar**.
 
 ---
 
