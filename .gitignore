@@ -2,9 +2,8 @@ node_modules/
 dist/
 .codex-build-*/
 .superpowers/
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 .vercel/
 Criar atalho na Area de Trabalho.ps1
 vat_backup_2026-07-05_14-18.json
