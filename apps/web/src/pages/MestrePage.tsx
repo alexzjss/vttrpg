@@ -11,7 +11,8 @@ import { TokenPanel } from '../gm/TokenPanel';
 import type { Send } from '../gm/types';
 import '../gm/gm.css';
 import { errorMessage } from '../i18n/errors';
-import { clearSession, openTableWindow } from '../session/session';
+import { logout } from '../session/logout';
+import { openTableWindow } from '../session/session';
 import { useGame } from '../store/gameStore';
 import { Tabletop } from '../tabletop/Tabletop';
 import { defaultTheme } from '../theme/themes';
@@ -50,7 +51,7 @@ export function MestrePage() {
         <div className="gm-header-actions">
           <button type="button" onClick={openTableWindow}>Abrir a mesa</button>
           <ResetCampaignButton />
-          <button type="button" onClick={() => { clearSession(); navigate('/login'); }}>Sair</button>
+          <button type="button" onClick={() => { void logout(); navigate('/login'); }}>Sair</button>
         </div>
       </header>
 

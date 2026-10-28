@@ -9,7 +9,8 @@ import { CharacterSheet } from '../player/CharacterSheet';
 import { ResourceBar } from '../player/ResourceBar';
 import { TurnBanner } from '../player/TurnBanner';
 import '../player/player.css';
-import { clearSession, getSession, openTableWindow } from '../session/session';
+import { logout } from '../session/logout';
+import { getSession, openTableWindow } from '../session/session';
 import { useGame } from '../store/gameStore';
 
 export function JogadorPage() {
@@ -32,7 +33,7 @@ export function JogadorPage() {
   const me = meId ? state.characters[meId] : undefined;
 
   const leave = () => {
-    clearSession();
+    void logout();
     navigate('/login');
   };
 

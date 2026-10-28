@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
 import { RequireSession } from './components/RequireSession';
 import { GameProvider } from './components/GameProvider';
+import { CampaignPickerPage } from './pages/CampaignPickerPage';
 import { LoginPage } from './pages/LoginPage';
 import { MestrePage } from './pages/MestrePage';
 import { JogadorPage } from './pages/JogadorPage';
@@ -29,6 +30,7 @@ export function AppRoutes({ transportFactory }: Props) {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage transportFactory={transportFactory} />} />
+      <Route path="/campanhas" element={<CampaignPickerPage />} />
       <Route path="/" element={<HomeRedirect />} />
       <Route
         element={<RequireSession role="gm">{game(<Outlet />)}</RequireSession>}

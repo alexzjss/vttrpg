@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { createTransport, type Session, type Transport } from '../net/transport';
+import { getSupabase } from '../net/supabase';
 import { setSession } from '../session/session';
+import { OnlineLoginPage } from './OnlineLoginPage';
 
 interface Props {
   transportFactory?: (session: Session) => Transport;
@@ -9,7 +11,12 @@ interface Props {
 
 type Pc = [id: string, name: string];
 
-export function LoginPage({ transportFactory = createTransport }: Props) {
+/** Com Supabase configurado, login online; senão o login local da Fase 1. */
+export function LoginPage(props: Props) {
+  return getSupabase() ? <OnlineLoginPage /> : <LocalLoginPage {...props} />;
+}
+
+function LocalLoginPage({ transportFactory = createTransport }: Props) {
   const navigate = useNavigate();
   const [characters, setCharacters] = useState<Pc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
