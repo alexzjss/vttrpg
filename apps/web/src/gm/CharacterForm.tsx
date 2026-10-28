@@ -1,5 +1,6 @@
 import { defaultResources, type Character, type HpVisibility, type ProjectedCharacter, type ResourceKey } from '@vtt/core';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { ImageTooLargeError } from '../net/compressImage';
 import { useImageSink } from '../net/ImageSinkContext';
 import type { Send } from './types';
 
@@ -49,8 +50,8 @@ export function CharacterForm({ character, send, onDone }: Props) {
       const url = await sink(file);
       setImages((prev) => ({ ...prev, [key]: url }));
       setImageError(null);
-    } catch {
-      setImageError('Não foi possível ler a imagem.');
+    } catch (err) {
+      setImageError(err instanceof ImageTooLargeError ? err.message : 'Não foi possível ler a imagem.');
     }
   };
 

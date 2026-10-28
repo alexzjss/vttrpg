@@ -158,6 +158,8 @@ create policy "vtt_read_own_topics"
 -- ---------------------------------------------------------------- storage
 -- Leitura publica; sem politica de escrita para anon/authenticated
 -- (uploads apenas por URL assinada emitida pelo servidor).
-insert into storage.buckets (id, name, public)
-values ('assets', 'assets', true)
-on conflict do nothing;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('assets', 'assets', true, 1500000, array['image/webp','image/png','image/jpeg'])
+on conflict (id) do update
+  set file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;

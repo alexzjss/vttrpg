@@ -1,4 +1,4 @@
-import { compressImage } from './compressImage';
+import { ImageTooLargeError, MAX_UPLOAD_BYTES, compressImage } from './compressImage';
 
 export interface UploadApi {
   requestUploadUrl(body: {
@@ -17,6 +17,7 @@ export async function uploadImage(
   compress: (file: File) => Promise<Blob> = compressImage,
 ): Promise<string> {
   const blob = await compress(file);
+  if (blob.size > MAX_UPLOAD_BYTES) throw new ImageTooLargeError();
   const { path, token, publicUrl } = await api.requestUploadUrl({
     campaignId,
     contentType: blob.type,

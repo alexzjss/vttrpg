@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitWithin } from './compressImage';
+import { ImageTooLargeError, fitWithin, pickBlob } from './compressImage';
 
 describe('fitWithin', () => {
   it('reduz mantendo a proporção', () => {
@@ -11,5 +11,21 @@ describe('fitWithin', () => {
   });
   it('respeita um máximo customizado e nunca zera um lado', () => {
     expect(fitWithin(1000, 10, 100)).toEqual({ w: 100, h: 1 });
+  });
+});
+
+describe('pickBlob', () => {
+  const blob = (n: number) => new Blob([new Uint8Array(n)]);
+  it('mantém o primeiro quando é pequeno', async () => {
+    const first = blob(500_000);
+    expect(await pickBlob(first, async () => blob(1))).toBe(first);
+  });
+  it('usa o segundo quando o primeiro passa de 1 MB', async () => {
+    const second = blob(900_000);
+    expect(await pickBlob(blob(1_200_000), async () => second)).toBe(second);
+  });
+  it('rejeita se ainda passar de 1,5 MB', async () => {
+    await expect(pickBlob(blob(1_600_000), async () => blob(1_550_000))).rejects.toBeInstanceOf(ImageTooLargeError);
+    await expect(pickBlob(blob(1_600_000), null)).rejects.toBeInstanceOf(ImageTooLargeError);
   });
 });

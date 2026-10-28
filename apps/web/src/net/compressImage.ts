@@ -2,6 +2,22 @@ export const MAX_SIDE = 2560;
 const FIRST_QUALITY = 0.85;
 const FALLBACK_QUALITY = 0.7;
 const SOFT_LIMIT_BYTES = 1_000_000;
+export const MAX_UPLOAD_BYTES = 1_500_000;
+
+export class ImageTooLargeError extends Error {
+  constructor() {
+    super('A imagem é grande demais mesmo depois de comprimida.');
+  }
+}
+
+/** Escolhe o blob a enviar: o primeiro se couber no soft limit; senão o de menor qualidade, que deve caber no limite. */
+export function pickBlob(first: Blob, second: (() => Promise<Blob>) | null, limit = MAX_UPLOAD_BYTES): Promise<Blob> {
+  return (async () => {
+    const blob = first.size > SOFT_LIMIT_BYTES && second ? await second() : first;
+    if (blob.size > limit) throw new ImageTooLargeError();
+    return blob;
+  })();
+}
 
 /** Reduz mantendo a proporção para caber em `max` no lado maior; nunca aumenta. */
 export function fitWithin(w: number, h: number, max = MAX_SIDE): { w: number; h: number } {
@@ -43,5 +59,5 @@ export async function compressImage(file: File): Promise<Blob> {
   if (!ctx) throw new Error('canvas indisponível');
   ctx.drawImage(img, 0, 0, w, h);
   const blob = await toBlob(canvas, FIRST_QUALITY);
-  return blob.size > SOFT_LIMIT_BYTES ? toBlob(canvas, FALLBACK_QUALITY) : blob;
+  return pickBlob(blob, () => toBlob(canvas, FALLBACK_QUALITY));
 }
