@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { emailForUsername, type Actor } from '@vtt/core';
 import { ApiError } from '../net/api';
 import { createAuthedApi, type Me } from '../net/authedApi';
@@ -9,9 +9,10 @@ import { clearSession, setSession } from '../session/session';
 
 export function OnlineLoginPage() {
   const navigate = useNavigate();
+  const notice = (useLocation().state as { notice?: string } | null)?.notice ?? null;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(notice);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: FormEvent) => {

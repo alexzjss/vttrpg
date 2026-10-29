@@ -4,6 +4,9 @@ import type { Actor } from '@vtt/core';
 /** Mensagem de erro do worker quando a campanha salva não pôde ser lida. */
 export const LOAD_FAILED = 'load_failed';
 
+/** A sessão desta aba não bate com a identidade do token compartilhado entre abas. */
+export const SESSION_CHANGED_MESSAGE = 'Sua sessão mudou em outra aba. Entre novamente.';
+
 export type ClientMessage =
   | { t: 'connect'; reqId: number; session: Actor }
   | { t: 'command'; reqId: number; cmd: Command }

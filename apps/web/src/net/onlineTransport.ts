@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   actorAudience,
+  audienceKey,
   topicFor,
   type Command,
   type CommandResult,
@@ -8,6 +9,8 @@ import {
   type ProjectedUpdate,
 } from '@vtt/core';
 import { createApi, type Api } from './api';
+import type { Me } from './authedApi';
+import { SESSION_CHANGED_MESSAGE } from './protocol';
 import { getSupabase } from './supabase';
 import type { Session, Transport } from './transport';
 
@@ -31,6 +34,9 @@ export function createOnlineTransport(deps: Deps = {}): Transport {
   let subscribeTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
   let campaignId = '';
+  let actor: Session['actor'] = { role: 'gm' };
+  let connected = false;
+  let everSubscribed = false;
   let api: Api | null = deps.api ?? null;
   // Updates recebidos antes de existir ouvinte (o store só registra depois do connect).
   let buffered: ProjectedUpdate[] | null = [];
@@ -47,7 +53,22 @@ export function createOnlineTransport(deps: Deps = {}): Transport {
     const { state } = await requireApi().get<{ state: ProjectedState }>(
       `/api/state?campaignId=${encodeURIComponent(campaignId)}`,
     );
+    // Falha fechada: o estado precisa ser da audiência que o ator desta aba espera.
+    const expected = audienceKey(actorAudience(actor));
+    if (!state?.audience || audienceKey(state.audience) !== expected) {
+      throw new Error(SESSION_CHANGED_MESSAGE);
+    }
     return state;
+  };
+  /** O token do Supabase é compartilhado entre abas; a sessão da mesa, não. */
+  const verifyIdentity = async (session: Extract<Session, { mode: 'online' }>) => {
+    const me = await requireApi().get<Me>('/api/me');
+    const ok =
+      me.username === session.username &&
+      me.role === session.actor.role &&
+      (session.actor.role === 'gm' ||
+        (me.campaignId === session.campaignId && me.characterId === session.actor.characterId));
+    if (!ok) throw new Error(SESSION_CHANGED_MESSAGE);
   };
   const dispatch = (u: ProjectedUpdate) => {
     if (buffered && listeners.size === 0) buffered.push(u);
@@ -72,12 +93,26 @@ export function createOnlineTransport(deps: Deps = {}): Transport {
         SUBSCRIBE_TIMEOUT_MS,
       );
       ch.subscribe((status) => {
-        if (status === 'SUBSCRIBED') settle(resolve);
-        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        if (status === 'SUBSCRIBED') {
+          const reconnected = everSubscribed;
+          everSubscribed = true;
+          settle(resolve);
+          if (reconnected && connected) void resyncAfterReconnect();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           settle(() => reject(new Error(CONNECT_FAILED_MESSAGE)));
         }
       });
     });
+  }
+
+  /** Updates perdidos durante a queda não voltam: refaz o estado e entrega como snapshot. */
+  async function resyncAfterReconnect() {
+    try {
+      const state = await fetchState();
+      if (!closed) snapshotListeners.forEach((l) => l(state));
+    } catch {
+      // sem rede ainda: a próxima lacuna de seq dispara o resync do store
+    }
   }
 
   function releaseChannel() {
@@ -100,6 +135,7 @@ export function createOnlineTransport(deps: Deps = {}): Transport {
       if (session.mode !== 'online') throw new Error(CONNECT_FAILED_MESSAGE);
       const client = requireClient();
       campaignId = session.campaignId;
+      actor = session.actor;
       api ??= createApi(async () => (await client.auth.getSession()).data.session?.access_token ?? null);
       const { data } = await client.auth.getSession();
       abortIfClosed();
@@ -111,11 +147,14 @@ export function createOnlineTransport(deps: Deps = {}): Transport {
       });
       authSub = sub.subscription;
       try {
+        await verifyIdentity(session);
+        abortIfClosed();
         await subscribe(client, topicFor(campaignId, actorAudience(session.actor)));
         abortIfClosed();
         // Assinou antes de buscar: o que chegar durante o GET fica no buffer até o store ouvir.
         const state = await fetchState();
         abortIfClosed();
+        connected = true;
         return state;
       } catch (e) {
         releaseChannel();

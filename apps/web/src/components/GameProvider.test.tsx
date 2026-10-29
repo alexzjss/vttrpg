@@ -96,4 +96,12 @@ describe('GameProvider', () => {
     await act(async () => release());
     expect(await screen.findByText('Conteúdo')).toBeTruthy();
   });
+
+  it('sessão trocada em outra aba limpa a sessão e vai ao login', async () => {
+    const t = createFakeTransport();
+    t.connect = async () => { throw new Error('Sua sessão mudou em outra aba. Entre novamente.'); };
+    renderProvider(() => t);
+    expect(await screen.findByText('Tela de login')).toBeTruthy();
+    expect(getSession()).toBeNull();
+  });
 });

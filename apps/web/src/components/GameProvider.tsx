@@ -7,6 +7,7 @@ import { createUploadSink, type ImageSink } from '../net/imageSink';
 import { getSupabase } from '../net/supabase';
 import { createOnlineUploadApi } from '../net/onlineUploadApi';
 import { clearSession, getSession } from '../session/session';
+import { SESSION_CHANGED_MESSAGE } from '../net/protocol';
 import { LOAD_FAILED_MESSAGE } from '../i18n/errors';
 import { ResetCampaignButton } from './ResetCampaignButton';
 
@@ -27,6 +28,7 @@ type Phase = 'connecting' | 'ready' | 'failed';
 export function GameProvider({ children, transportFactory = createTransport }: Props) {
   const status = useGame((s) => s.status);
   const loadFailed = useGame((s) => s.loadFailed);
+  const sessionChanged = useGame((s) => s.sessionChanged);
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>('connecting');
   const [sink] = useState(() => onlineSink(getSession()));
@@ -56,6 +58,13 @@ export function GameProvider({ children, transportFactory = createTransport }: P
     };
   }, [transportFactory]);
 
+  useEffect(() => {
+    if (!sessionChanged) return;
+    clearSession();
+    navigate('/login', { state: { notice: SESSION_CHANGED_MESSAGE } });
+  }, [sessionChanged, navigate]);
+
+  if (sessionChanged) return null;
   if (phase === 'failed' || (phase === 'ready' && status === 'error')) {
     return (
       <div>

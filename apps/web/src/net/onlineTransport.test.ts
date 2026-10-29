@@ -13,10 +13,24 @@ const player: Session = {
   campaignId: CAMPAIGN,
   username: 'bia',
 };
-const STATE = { seq: 3 } as unknown as ProjectedState;
+const STATE = { seq: 3, audience: { kind: 'gm' } } as unknown as ProjectedState;
+const PLAYER_STATE = { seq: 3, audience: { kind: 'player', characterId: 'c1' } } as unknown as ProjectedState;
+const meFor = (s: Session) =>
+  s.mode === 'online' && s.actor.role === 'player'
+    ? { username: s.username, role: 'player', campaignId: s.campaignId, characterId: s.actor.characterId }
+    : { username: 'ana', role: 'gm', campaignId: null, characterId: null };
 
-function fakes(opts: { subscribeStatus?: string | null; token?: string | null; gate?: Promise<void> } = {}) {
+function fakes(
+  opts: {
+    subscribeStatus?: string | null;
+    token?: string | null;
+    gate?: Promise<void>;
+    session?: Session;
+    me?: unknown;
+  } = {},
+) {
   const log: string[] = [];
+  let statusCb: ((s: string) => void) | null = null;
   let broadcast: ((m: { payload: unknown }) => void) | null = null;
   let authCb: ((event: string, s: { access_token: string } | null) => void) | null = null;
   const unsubscribe = vi.fn();
@@ -31,6 +45,7 @@ function fakes(opts: { subscribeStatus?: string | null; token?: string | null; g
       }),
       subscribe: vi.fn((cb: (s: string) => void) => {
         log.push('subscribe');
+        statusCb = cb;
         const status = opts.subscribeStatus === undefined ? 'SUBSCRIBED' : opts.subscribeStatus;
         if (status) cb(status);
         return ch;
@@ -60,13 +75,15 @@ function fakes(opts: { subscribeStatus?: string | null; token?: string | null; g
   const api: Api = {
     get: vi.fn(async (path: string) => {
       log.push(`get ${path}`);
-      return { state: STATE };
+      if (path === '/api/me') return opts.me ?? meFor(opts.session ?? gm);
+      return { state: opts.session?.actor.role === 'player' ? PLAYER_STATE : STATE };
     }) as Api['get'],
     post: vi.fn(async () => ({ ok: true })) as Api['post'],
     patch: vi.fn() as Api['patch'],
   };
   return {
     supabase, api, log, channelFn, removeChannel, setAuth, unsubscribe,
+    status: (st: string) => statusCb?.(st),
     emit: (payload: unknown) => broadcast?.({ payload }),
     auth: (event: string, token: string | null) => authCb?.(event, token ? { access_token: token } : null),
   };
@@ -82,11 +99,11 @@ describe('OnlineTransport', () => {
     await expect(t.connect(gm)).resolves.toBe(STATE);
     expect(f.setAuth).toHaveBeenCalledWith('tok1');
     expect(f.channelFn).toHaveBeenCalledWith(`campaign:${CAMPAIGN}:gm`, { config: { private: true } });
-    expect(f.log).toEqual(['channel', 'subscribe', `get /api/state?campaignId=${CAMPAIGN}`]);
+    expect(f.log).toEqual(['get /api/me', 'channel', 'subscribe', `get /api/state?campaignId=${CAMPAIGN}`]);
   });
 
   it('jogador assina o canal do próprio personagem', async () => {
-    const f = fakes();
+    const f = fakes({ session: player });
     await createOnlineTransport({ supabase: f.supabase, api: f.api }).connect(player);
     expect(f.channelFn.mock.calls[0][0]).toBe(`campaign:${CAMPAIGN}:player:c1`);
   });
@@ -110,7 +127,7 @@ describe('OnlineTransport', () => {
     await t.send(command);
     expect(f.api.post).toHaveBeenCalledWith('/api/command', { campaignId: CAMPAIGN, command });
     await expect(t.resync()).resolves.toBe(STATE);
-    expect(f.api.get).toHaveBeenCalledTimes(2);
+    expect(f.api.get).toHaveBeenCalledTimes(3);
   });
 
   it('TOKEN_REFRESHED atualiza a auth do Realtime', async () => {
@@ -128,7 +145,7 @@ describe('OnlineTransport', () => {
     const assertion = expect(t.connect(gm)).rejects.toThrow('Não foi possível conectar à mesa.');
     await vi.advanceTimersByTimeAsync(10_000);
     await assertion;
-    expect(f.api.get).not.toHaveBeenCalled();
+    expect(f.api.get).not.toHaveBeenCalledWith(expect.stringContaining('/api/state'));
     expect(f.removeChannel).toHaveBeenCalledTimes(1);
   });
 
@@ -136,7 +153,7 @@ describe('OnlineTransport', () => {
     const f = fakes({ subscribeStatus: 'CHANNEL_ERROR' });
     const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
     await expect(t.connect(gm)).rejects.toThrow('Não foi possível conectar à mesa.');
-    expect(f.api.get).not.toHaveBeenCalled();
+    expect(f.api.get).not.toHaveBeenCalledWith(expect.stringContaining('/api/state'));
   });
 
   it('rejeita sem sessão de autenticação ou sem cliente Supabase', async () => {
@@ -157,7 +174,8 @@ describe('OnlineTransport', () => {
   it('entrega ao primeiro ouvinte o update que chegou durante o GET do estado', async () => {
     const f = fakes();
     const update = { seq: 4 } as unknown as ProjectedUpdate;
-    (f.api.get as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+    (f.api.get as ReturnType<typeof vi.fn>).mockImplementation(async (path: string) => {
+      if (path === '/api/me') return meFor(gm);
       f.emit(update);
       return { state: STATE };
     });
@@ -182,7 +200,10 @@ describe('OnlineTransport', () => {
 
   it('libera canal e auth quando o estado inicial falha', async () => {
     const f = fakes();
-    (f.api.get as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('500'));
+    (f.api.get as ReturnType<typeof vi.fn>).mockImplementation(async (path: string) => {
+      if (path === '/api/me') return meFor(gm);
+      throw new Error('500');
+    });
     const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
     await expect(t.connect(gm)).rejects.toThrow('500');
     expect(f.removeChannel).toHaveBeenCalledTimes(1);
@@ -201,5 +222,44 @@ describe('OnlineTransport', () => {
   it('send antes de connect dá erro claro', () => {
     const t = createOnlineTransport({ supabase: null });
     expect(() => t.send({ type: 'nextTurn' } as never)).toThrow('antes de conectar');
+  });
+
+  it('após reconexão do Realtime busca o estado e o entrega como snapshot', async () => {
+    const f = fakes();
+    const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
+    const snaps: ProjectedState[] = [];
+    t.onSnapshot((s) => snaps.push(s));
+    await t.connect(gm);
+    f.status('CLOSED');
+    expect(snaps).toEqual([]);
+    f.status('SUBSCRIBED');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snaps).toEqual([STATE]);
+  });
+
+  it('rejeita e não aplica estado quando /api/me discorda da sessão (jogador x mestre)', async () => {
+    const f = fakes({ me: { username: 'ana', role: 'gm', campaignId: null, characterId: null } });
+    const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
+    await expect(t.connect(player)).rejects.toThrow('Sua sessão mudou em outra aba. Entre novamente.');
+    expect(f.log.some((l) => l.startsWith('get /api/state'))).toBe(false);
+    expect(f.channelFn).not.toHaveBeenCalled();
+  });
+
+  it('rejeita quando outro personagem ou usuário está no token', async () => {
+    const other = { ...meFor(player), characterId: 'c2' };
+    const f = fakes({ me: other });
+    await expect(createOnlineTransport({ supabase: f.supabase, api: f.api }).connect(player)).rejects.toThrow(
+      'Sua sessão mudou',
+    );
+  });
+
+  it('rejeita estado de outra audiência mesmo com /api/me coerente', async () => {
+    const f = fakes({ me: meFor(player) });
+    (f.api.get as ReturnType<typeof vi.fn>).mockImplementation(async (path: string) =>
+      path === '/api/me' ? meFor(player) : { state: STATE },
+    );
+    const t = createOnlineTransport({ supabase: f.supabase, api: f.api });
+    await expect(t.connect(player)).rejects.toThrow('Sua sessão mudou');
+    expect(f.removeChannel).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,7 +8,7 @@ import {
   type ProjectedState,
   type ProjectedUpdate,
 } from '@vtt/core';
-import { LOAD_FAILED } from '../net/protocol';
+import { LOAD_FAILED, SESSION_CHANGED_MESSAGE } from '../net/protocol';
 import type { Session, Transport } from '../net/transport';
 
 /** Fila de cues sem consumidor (ex.: aba sem tabletop) não cresce sem limite. */
@@ -21,6 +21,8 @@ interface GameStore {
   lastError: ErrorCode | null;
   /** A campanha salva não pôde ser lida (worker em modo de falha). */
   loadFailed: boolean;
+  /** O token compartilhado entre abas não bate com a sessão desta aba. */
+  sessionChanged: boolean;
   connect(t: Transport, s: Session): Promise<void>;
   /** Solta assinaturas e zera o estado. Não fecha o transporte: quem o criou é dono dele. */
   disconnect(): void;
@@ -31,6 +33,8 @@ interface GameStore {
 }
 
 const isLoadFailed = (e: unknown) => e instanceof Error && e.message === LOAD_FAILED;
+const isSessionChanged = (e: unknown) => e instanceof Error && e.message === SESSION_CHANGED_MESSAGE;
+const failure = (e: unknown) => ({ status: 'error' as const, loadFailed: isLoadFailed(e), sessionChanged: isSessionChanged(e) });
 
 export function createGameStore() {
   // Única conexão vigente. Um connect/resync/send de transporte superado é descartado.
@@ -56,7 +60,7 @@ export function createGameStore() {
         const state = await t.resync();
         if (currentTransport === t) set({ state });
       } catch (e) {
-        if (currentTransport === t) set({ status: 'error', loadFailed: isLoadFailed(e) });
+        if (currentTransport === t) set(failure(e));
       } finally {
         resyncing = false;
       }
@@ -83,16 +87,17 @@ export function createGameStore() {
       cues: [],
       lastError: null,
       loadFailed: false,
+      sessionChanged: false,
       async connect(t, s) {
         dropSubscriptions();
         currentTransport = t;
         currentSession = s;
-        set({ status: 'connecting', lastError: null, loadFailed: false });
+        set({ status: 'connecting', lastError: null, loadFailed: false, sessionChanged: false });
         let state: ProjectedState;
         try {
           state = await t.connect(s);
         } catch (e) {
-          if (currentTransport === t) set({ status: 'error', loadFailed: isLoadFailed(e) });
+          if (currentTransport === t) set(failure(e));
           return;
         }
         if (currentTransport !== t) return; // superado por outro connect ou disconnect
@@ -106,7 +111,7 @@ export function createGameStore() {
         dropSubscriptions();
         currentTransport = null;
         currentSession = null;
-        set({ status: 'idle', state: null, cues: [], lastError: null, loadFailed: false });
+        set({ status: 'idle', state: null, cues: [], lastError: null, loadFailed: false, sessionChanged: false });
       },
       async resetCampaign() {
         const t = currentTransport;
@@ -122,7 +127,7 @@ export function createGameStore() {
         try {
           result = await t.send(cmd);
         } catch (e) {
-          if (currentTransport === t) set({ status: 'error', loadFailed: isLoadFailed(e) });
+          if (currentTransport === t) set(failure(e));
           throw e;
         }
         if (currentTransport === t && !result.ok) set({ lastError: result.error });
