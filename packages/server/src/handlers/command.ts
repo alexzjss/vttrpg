@@ -15,5 +15,8 @@ export const command: Handler = async (req, deps) => {
   if (!isWellFormedCommand(cmd)) return badRequest('bad_command');
   const actor = actorFor(who, campaignId);
   if (!actor) return forbidden();
-  return json(200, await processCommand(deps.store, campaignId, actor, cmd, deps.newId));
+  const result = await processCommand(deps.store, campaignId, actor, cmd, deps.newId);
+  // A revisão global da campanha vaza atividade de outros atores: só o mestre a recebe.
+  if (result.ok && actor.role !== 'gm') return json(200, { ok: true });
+  return json(200, result);
 };

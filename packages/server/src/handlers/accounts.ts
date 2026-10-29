@@ -55,7 +55,7 @@ export const patchAccount: Handler = async (req, deps) => {
   const who = await requireGm(req, deps);
   if (isFailure(who)) return who;
   const b = req.body;
-  if (!isRecord(b) || typeof b.id !== 'string') return badRequest();
+  if (!isRecord(b) || !isUuid(b.id)) return badRequest();
   if (b.active !== undefined && typeof b.active !== 'boolean') return badRequest();
   if (b.password !== undefined && (typeof b.password !== 'string' || b.password.length < MIN_PASSWORD)) {
     return badRequest('weak_password');

@@ -12,8 +12,8 @@ import { route } from './router';
 const C1 = '00000000-0000-4000-8000-000000000001';
 const C2 = '00000000-0000-4000-8000-000000000002';
 const C3 = '00000000-0000-4000-8000-000000000003';
-const GM_ID = 'gm-user';
-const ANA_ID = 'ana-user';
+const GM_ID = '00000000-0000-4000-8000-0000000000a1';
+const ANA_ID = '00000000-0000-4000-8000-0000000000a2';
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 5 };
 const pc = (id: string, name: string): Character => ({
   id, kind: 'pc', name, hpVisibility: 'exact', resources: defaultResources(), ...base,
@@ -170,6 +170,23 @@ describe('POST /api/command', () => {
     expect((await call(deps, 'POST', '/api/command', null, { body })).status).toBe(401);
   });
 
+  it('jogador com sucesso recebe só {ok:true}, sem revision; o mestre a recebe', async () => {
+    const w = world();
+    const grid = { cols: 5, rows: 5, cellSize: 50, visible: true };
+    const gm = await call(w.deps, 'POST', '/api/command', GM_ID, {
+      body: { campaignId: C1, command: { type: 'updateGrid', grid, background: '' } },
+    });
+    expect(gm.body).toMatchObject({ ok: true, revision: expect.any(Number) });
+    await call(w.deps, 'POST', '/api/command', GM_ID, {
+      body: { campaignId: C1, command: { type: 'placeToken', characterId: 'p1', cell: { col: 0, row: 0 } } },
+    });
+    const tokenId = Object.keys((await w.store.load(C1))!.scene.tokens)[0]!;
+    const player = await call(w.deps, 'POST', '/api/command', ANA_ID, {
+      body: { campaignId: C1, command: { type: 'moveToken', tokenId, to: { col: 1, row: 0 } } },
+    });
+    expect(player).toEqual({ status: 200, body: { ok: true } });
+  });
+
   it('GM executa um comando e o resultado vem em 200', async () => {
     const { deps } = world();
     const res = await call(deps, 'POST', '/api/command', GM_ID, {
@@ -281,7 +298,8 @@ describe('contas', () => {
   it('PATCH valida: senha curta 400, id desconhecido 404, conta GM 403', async () => {
     const { deps } = world();
     expect((await call(deps, 'PATCH', '/api/accounts', GM_ID, { body: { id: ANA_ID, password: 'abc' } })).status).toBe(400);
-    expect((await call(deps, 'PATCH', '/api/accounts', GM_ID, { body: { id: 'nope', active: false } })).status).toBe(404);
+    expect((await call(deps, 'PATCH', '/api/accounts', GM_ID, { body: { id: '00000000-0000-4000-8000-0000000000ff', active: false } })).status).toBe(404);
+    expect((await call(deps, 'PATCH', '/api/accounts', GM_ID, { body: { id: 'nope', active: false } })).status).toBe(400);
     expect((await call(deps, 'PATCH', '/api/accounts', GM_ID, { body: { id: GM_ID, active: false } })).status).toBe(403);
   });
 });
@@ -398,6 +416,13 @@ describe('assets', () => {
     expect(await upload(deps, GM_ID, { ...ok, campaignId: 'x' })).toEqual({ status: 400, body: { error: 'bad_campaign' } });
     expect((await upload(deps, ANA_ID, { ...ok, campaignId: C1 })).status).toBe(403);
     expect((await upload(deps, null, { ...ok, campaignId: C1 })).status).toBe(401);
+  });
+
+  it('campanha inexistente dá 404 e nenhuma URL assinada é emitida', async () => {
+    const w = world();
+    const res = await upload(w.deps, GM_ID, { campaignId: C3, contentType: 'image/png', bytes: 10 });
+    expect(res).toEqual({ status: 404, body: { error: 'not_found' } });
+    expect(w.assetRows).toEqual([]);
   });
 
   it('usage soma os bytes da campanha; só GM', async () => {

@@ -22,6 +22,7 @@ export const uploadUrl: Handler = async (req, deps) => {
   if (typeof bytes !== 'number' || !Number.isInteger(bytes) || bytes <= 0 || bytes > MAX_ASSET_BYTES) {
     return badAsset();
   }
+  if (!(await deps.store.load(body.campaignId))) return json(404, { error: 'not_found' });
   const id = deps.newId();
   const path = `${body.campaignId}/${id}.${ext}`;
   const { token } = await deps.assets.createSignedUploadUrl(path);
