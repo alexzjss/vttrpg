@@ -62,7 +62,8 @@ describe('rollDice', () => {
     const r = rollDice(parse('1d20+5-1d4'), () => 0);
     expect(r.modifier).toBe(5);
     expect(r.total).toBe(1 + 5 - 1);
-    expect(r.natural).toBe(1);
+    expect(r.natural).toBeNull();
+    expect(rollDice(parse('1d20+5'), () => 0).natural).toBe(1);
     expect(rollDice(parse('1d6'), () => 0.999999).total).toBe(6);
   });
   it('natural é null sem d20 único, com grupo negativo ou vários grupos', () => {
