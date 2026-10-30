@@ -74,3 +74,25 @@ describe('isWellFormedCommand', () => {
     for (const v of [null, undefined, 3, 'x', [], {}, { type: 'drop' }]) expect(isWellFormedCommand(v)).toBe(false);
   });
 });
+
+describe('limites de tamanho', () => {
+  const create = (over: Record<string, unknown>) => ({ type: 'createCharacter', input: { ...input, ...over } });
+  it('nome aceita 200 e recusa 201 caracteres', () => {
+    expect(isWellFormedCommand(create({ name: 'a'.repeat(200) }))).toBe(true);
+    expect(isWellFormedCommand(create({ name: 'a'.repeat(201) }))).toBe(false);
+  });
+  it('imagens aceitam 2048 e recusam 2049 caracteres', () => {
+    for (const f of ['portrait', 'fullBodyArt', 'tokenImage']) {
+      expect(isWellFormedCommand(create({ [f]: 'a'.repeat(2048) }))).toBe(true);
+      expect(isWellFormedCommand(create({ [f]: 'a'.repeat(2049) }))).toBe(false);
+    }
+    const bg = (background: string) => ({ type: 'updateGrid', grid, background });
+    expect(isWellFormedCommand(bg('a'.repeat(2048)))).toBe(true);
+    expect(isWellFormedCommand(bg('a'.repeat(2049)))).toBe(false);
+  });
+  it('patch e ids respeitam os mesmos limites', () => {
+    const patch = (p: Record<string, unknown>) => ({ type: 'updateCharacter', characterId: 'a', patch: p });
+    expect(isWellFormedCommand(patch({ name: 'a'.repeat(201) }))).toBe(false);
+    expect(isWellFormedCommand({ type: 'deleteCharacter', characterId: 'a'.repeat(201) })).toBe(false);
+  });
+});

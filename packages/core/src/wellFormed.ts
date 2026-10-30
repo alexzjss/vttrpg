@@ -3,7 +3,12 @@ import type { Command } from './commands';
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown): v is string => typeof v === 'string';
-const id = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+/** Limites de tamanho: nomes e ids curtos, URLs de imagem mais longas. */
+export const MAX_SHORT_TEXT = 200;
+export const MAX_URL_TEXT = 2048;
+const shortStr = (v: unknown): v is string => str(v) && v.length <= MAX_SHORT_TEXT;
+const urlStr = (v: unknown): v is string => str(v) && v.length <= MAX_URL_TEXT;
+const id = (v: unknown): v is string => shortStr(v) && v.length > 0;
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const int = (v: unknown): v is number => num(v) && Number.isInteger(v);
 const posInt = (v: unknown): v is number => int(v) && v > 0;
@@ -21,10 +26,10 @@ const isResources = (v: unknown): boolean =>
 
 const CHAR_VALIDATORS: Record<string, (v: unknown) => boolean> = {
   kind: (v) => oneOf(v, ['pc', 'npc']),
-  name: str,
-  portrait: str,
-  fullBodyArt: str,
-  tokenImage: str,
+  name: shortStr,
+  portrait: urlStr,
+  fullBodyArt: urlStr,
+  tokenImage: urlStr,
   speed: num,
   hpVisibility: (v) => oneOf(v, VISIBILITY),
 };
@@ -60,7 +65,7 @@ export function isWellFormedCommand(cmd: unknown): cmd is Command {
     case 'moveToken': return id(cmd.tokenId) && isCell(cmd.to);
     case 'removeToken': return id(cmd.tokenId);
     case 'setTokenHidden': return id(cmd.tokenId) && bool(cmd.hidden);
-    case 'updateGrid': return isGrid(cmd.grid) && str(cmd.background);
+    case 'updateGrid': return isGrid(cmd.grid) && urlStr(cmd.background);
     case 'startEncounter':
       return Array.isArray(cmd.entries)
         && cmd.entries.every((e) => isRec(e) && id(e.tokenId) && num(e.initiative));
