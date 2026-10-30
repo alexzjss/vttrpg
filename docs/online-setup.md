@@ -225,6 +225,8 @@ Esta verificação é opcional; o assistente vai executá-la durante o teste de 
 4. Volte à janela anônima e tente qualquer ação com a conta do jogador.
 5. A ação deve **falhar**.
 
+Depois da desativação, as ações falham na hora. As atualizações ao vivo que já estavam abertas na tela do jogador podem continuar por até cerca de 1 hora, até o token de login dele expirar; recarregar a página corta essas atualizações.
+
 ---
 
 ## Problemas comuns
