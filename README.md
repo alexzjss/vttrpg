@@ -19,6 +19,10 @@ npm run build   # gera apps/web/dist
 
 Para uma porta fixa: `npm run dev -- --port 3177 --strictPort`.
 
+## Modo online
+
+Sem configuração extra, o app roda no modo local, offline, no navegador. Para usar o modo online (campanhas compartilhadas com o mestre e os jogadores), siga o guia passo a passo em [`docs/online-setup.md`](docs/online-setup.md). As variáveis de ambiente estão descritas em `.env.example`.
+
 ## Legado
 
 O app anterior está em `/legacy` e não faz parte do workspace.

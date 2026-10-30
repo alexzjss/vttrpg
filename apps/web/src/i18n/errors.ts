@@ -12,6 +12,7 @@ const messages: Record<ErrorCode, string> = {
   encounter_active: 'Já há um combate em andamento.',
   tokens_out_of_bounds: 'Há tokens fora do novo tamanho do grid. Mova-os antes.',
   invalid_order: 'A ordem de iniciativa é inválida.',
+  conflict: 'A mesa mudou ao mesmo tempo; tente de novo.',
 };
 
 export const LOAD_FAILED_MESSAGE = 'Falha ao carregar a campanha salva.';

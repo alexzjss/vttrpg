@@ -37,7 +37,11 @@ export function createLocalTransport(): Transport {
 
   const post = (m: ClientMessage) => port.postMessage(m);
   // A aba fechada sem close() (navegação, fechamento) também precisa sair do worker.
-  const onPageHide = () => post({ t: 'disconnect' });
+  // Página no bfcache (persisted) pode voltar: a conexão deve continuar viva.
+  const onPageHide = (event: Event) => {
+    if ((event as PageTransitionEvent).persisted) return;
+    post({ t: 'disconnect' });
+  };
   globalThis.addEventListener?.('pagehide', onPageHide);
   const awaitSnapshot = (build: (reqId: number) => ClientMessage) =>
     new Promise<ProjectedState>((resolve, reject) => {
@@ -47,7 +51,7 @@ export function createLocalTransport(): Transport {
     });
 
   return {
-    connect: (session: Session) => awaitSnapshot((reqId) => ({ t: 'connect', reqId, session })),
+    connect: (session: Session) => awaitSnapshot((reqId) => ({ t: 'connect', reqId, session: session.actor })),
     resync: () => awaitSnapshot((reqId) => ({ t: 'resync', reqId })),
     onUpdate(listener) {
       listeners.add(listener);

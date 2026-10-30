@@ -1,10 +1,12 @@
 import type { Grid, ProjectedState } from '@vtt/core';
 import { useState, type ChangeEvent } from 'react';
-import { readImageFile } from './imageInput';
+import { ImageTooLargeError } from '../net/compressImage';
+import { useImageSink } from '../net/ImageSinkContext';
 import type { Send } from './types';
 
 export function ScenePanel({ state, send }: { state: ProjectedState; send: Send }) {
   const { grid } = state.scene;
+  const sink = useImageSink();
   const [cols, setCols] = useState(String(grid.cols));
   const [rows, setRows] = useState(String(grid.rows));
   const [cellSize, setCellSize] = useState(String(grid.cellSize));
@@ -16,10 +18,10 @@ export function ScenePanel({ state, send }: { state: ProjectedState; send: Send 
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      setBackground(await readImageFile(file, 2048));
+      setBackground(await sink(file, 2048));
       setError(null);
-    } catch {
-      setError('Não foi possível ler a imagem.');
+    } catch (err) {
+      setError(err instanceof ImageTooLargeError ? err.message : 'Não foi possível ler a imagem.');
     }
   };
 

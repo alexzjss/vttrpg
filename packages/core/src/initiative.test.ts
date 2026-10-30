@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createCampaign, defaultResources } from './campaign';
 import { sortInitiative } from './initiative';
+import { makeCharacter } from './testing';
 import type { CampaignState, Character } from './model';
 
 function ch(id: string, name: string, speed: number): Character {
-  return { id, kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', resources: defaultResources(), speed, hpVisibility: 'exact' };
+  return makeCharacter({ id, name, speed, resources: defaultResources() });
 }
 
 function stateWith(list: [string, string, number][]): CampaignState {

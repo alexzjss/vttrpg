@@ -11,8 +11,8 @@ describe('session', () => {
   });
 
   it('grava e lê a sessão', () => {
-    expect(setSession({ role: 'gm' })).toBe(true);
-    expect(getSession()).toEqual({ role: 'gm' });
+    expect(setSession({ mode: 'local', actor: { role: 'gm' } })).toBe(true);
+    expect(getSession()).toEqual({ mode: 'local', actor: { role: 'gm' } });
     clearSession();
     expect(getSession()).toBeNull();
   });
@@ -21,7 +21,23 @@ describe('session', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota');
     });
-    expect(setSession({ role: 'gm' })).toBe(false);
+    expect(setSession({ mode: 'local', actor: { role: 'gm' } })).toBe(false);
+  });
+
+  it('getSession trata o formato antigo {role} como inválido', () => {
+    sessionStorage.setItem('vtt.session', '{"role":"gm"}');
+    expect(getSession()).toBeNull();
+  });
+
+  it('guarda e lê sessão online', () => {
+    const s = { mode: 'online', actor: { role: 'gm' }, campaignId: 'c1', username: 'ana' } as const;
+    expect(setSession(s)).toBe(true);
+    expect(getSession()).toEqual(s);
+  });
+
+  it('getSession rejeita sessão online sem campanha', () => {
+    sessionStorage.setItem('vtt.session', '{"mode":"online","actor":{"role":"gm"},"username":"a"}');
+    expect(getSession()).toBeNull();
   });
 
   it('getSession ignora valor corrompido', () => {

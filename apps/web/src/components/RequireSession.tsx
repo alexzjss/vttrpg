@@ -1,17 +1,17 @@
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router';
-import type { Session } from '../net/transport';
+import type { Actor } from '@vtt/core';
 import { getSession } from '../session/session';
 
 interface Props {
-  role?: Session['role'];
+  role?: Actor['role'];
   children: ReactNode;
 }
 
 /** Sem sessão (ou com papel errado) volta ao login. */
 export function RequireSession({ role, children }: Props) {
   const session = getSession();
-  if (!session || (role !== undefined && session.role !== role)) {
+  if (!session || (role !== undefined && session.actor.role !== role)) {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;

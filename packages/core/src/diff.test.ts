@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createCampaign, defaultResources } from './campaign';
 import { applyChanges, diffProjection, stableStringify } from './diff';
 import { project } from './projection';
+import { makeCharacter } from './testing';
 
 describe('stableStringify', () => {
   it('ignora a ordem das chaves', () => {
@@ -13,10 +14,7 @@ describe('stableStringify', () => {
 describe('diffProjection', () => {
   const base = () => {
     const s = createCampaign('c', 'C');
-    s.characters.p1 = {
-      id: 'p1', kind: 'pc', name: 'Ana', portrait: '', fullBodyArt: '', tokenImage: '',
-      resources: defaultResources(), speed: 5, hpVisibility: 'exact',
-    };
+    s.characters.p1 = makeCharacter({ id: 'p1', name: 'Ana', resources: defaultResources() });
     return s;
   };
   it('sem mudanças -> vazio', () => {
@@ -40,6 +38,6 @@ describe('diffProjection', () => {
     const r = applyChanges(p, [{ kind: 'setScene', scene: { ...p.scene, name: 'X' } }], 5);
     expect(r.scene.tokens.t1).toBeDefined();
     expect(r.scene.name).toBe('X');
-    expect(r.revision).toBe(5);
+    expect(r.seq).toBe(5);
   });
 });

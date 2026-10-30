@@ -1,8 +1,8 @@
 import { AppRoutes } from './routes';
-import type { Transport } from './net/transport';
+import type { Session, Transport } from './net/transport';
 
 interface Props {
-  transportFactory?: () => Transport;
+  transportFactory?: (session: Session) => Transport;
 }
 
 export function App({ transportFactory }: Props) {

@@ -27,7 +27,7 @@ describe('GameProvider', () => {
   beforeEach(() => {
     sessionStorage.clear();
     useGame.getState().disconnect();
-    setSession({ role: 'gm' });
+    setSession({ mode: 'local', actor: { role: 'gm' } });
   });
 
   it('mostra Conectando… e depois o conteúdo quando pronto', async () => {
@@ -87,7 +87,7 @@ describe('GameProvider', () => {
       new Promise((resolve) => {
         release = () => resolve(realConnect(s));
       });
-    setSession({ role: 'player', characterId: 'x' });
+    setSession({ mode: 'local', actor: { role: 'player', characterId: 'x' } });
     renderProvider(() => second);
 
     expect(screen.queryByText('Conteúdo')).toBeNull();
@@ -95,5 +95,13 @@ describe('GameProvider', () => {
 
     await act(async () => release());
     expect(await screen.findByText('Conteúdo')).toBeTruthy();
+  });
+
+  it('sessão trocada em outra aba limpa a sessão e vai ao login', async () => {
+    const t = createFakeTransport();
+    t.connect = async () => { throw new Error('Sua sessão mudou em outra aba. Entre novamente.'); };
+    renderProvider(() => t);
+    expect(await screen.findByText('Tela de login')).toBeTruthy();
+    expect(getSession()).toBeNull();
   });
 });

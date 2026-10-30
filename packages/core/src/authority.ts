@@ -1,6 +1,7 @@
 import type { Command, ErrorCode } from './commands';
 import { cuesFor } from './cues';
 import { decide } from './decide';
+import type { GameEvent } from './events';
 import { diffProjection, type ProjectedUpdate } from './diff';
 import type { Actor, CampaignState, Id } from './model';
 import { audienceKey, project, type Audience, type ProjectedState } from './projection';
@@ -8,20 +9,16 @@ import { applyEvents } from './reducer';
 
 export type CommandResult = { ok: true; revision: number } | { ok: false; error: ErrorCode };
 export interface AudienceUpdate { audience: Audience; update: ProjectedUpdate }
-export interface HandleOutput { result: CommandResult; updates: AudienceUpdate[] }
+export interface HandleOutput { result: CommandResult; updates: AudienceUpdate[]; events: GameEvent[] }
 
 /** Autoridade síncrona: um comando por vez; produz updates projetados por audiência. */
 export class Authority {
   private state: CampaignState;
   private readonly newId: () => Id;
-  private readonly initialRevision: number;
-  /** Última revisão entregue (snapshot ou update) a cada audiência. */
-  private readonly lastDelivered = new Map<string, number>();
 
   constructor(state: CampaignState, deps: { newId: () => Id }) {
     this.state = state;
     this.newId = deps.newId;
-    this.initialRevision = state.revision;
   }
 
   getState(): CampaignState {
@@ -29,33 +26,33 @@ export class Authority {
   }
 
   snapshotFor(audience: Audience): ProjectedState {
-    this.lastDelivered.set(audienceKey(audience), this.state.revision);
     return project(this.state, audience);
   }
 
   handle(actor: Actor, cmd: Command): HandleOutput {
     const decision = decide(this.state, cmd, { actor, newId: this.newId });
-    if (!decision.ok) return { result: { ok: false, error: decision.error }, updates: [] };
+    if (!decision.ok) return { result: { ok: false, error: decision.error }, updates: [], events: [] };
     if (decision.events.length === 0) {
-      return { result: { ok: true, revision: this.state.revision }, updates: [] };
+      return { result: { ok: true, revision: this.state.revision }, updates: [], events: [] };
     }
 
     const before = this.state;
     const after: CampaignState = { ...applyEvents(before, decision.events), revision: before.revision + 1 };
-    this.state = after;
 
     const updates: AudienceUpdate[] = [];
+    const audienceSeq = { ...before.audienceSeq };
     for (const audience of knownAudiences(before, after)) {
       const projectedAfter = project(after, audience);
       const changes = diffProjection(project(before, audience), projectedAfter);
       const cues = cuesFor(decision.events, before, projectedAfter);
       if (changes.length === 0 && cues.length === 0) continue;
       const key = audienceKey(audience);
-      const baseRevision = this.lastDelivered.get(key) ?? this.initialRevision;
-      this.lastDelivered.set(key, after.revision);
-      updates.push({ audience, update: { revision: after.revision, baseRevision, changes, cues } });
+      const seq = (audienceSeq[key] ?? 0) + 1;
+      audienceSeq[key] = seq;
+      updates.push({ audience, update: { seq, changes, cues } });
     }
-    return { result: { ok: true, revision: after.revision }, updates };
+    this.state = { ...after, audienceSeq };
+    return { result: { ok: true, revision: after.revision }, updates, events: decision.events };
   }
 }
 

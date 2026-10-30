@@ -1,14 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useGame } from '../store/gameStore';
-import { createTransport, type Transport } from '../net/transport';
+import { createTransport, type Session, type Transport } from '../net/transport';
+import { ImageSinkProvider } from '../net/ImageSinkContext';
+import { createUploadSink, type ImageSink } from '../net/imageSink';
+import { getSupabase } from '../net/supabase';
+import { createOnlineUploadApi } from '../net/onlineUploadApi';
 import { clearSession, getSession } from '../session/session';
+import { SESSION_CHANGED_MESSAGE } from '../net/protocol';
 import { LOAD_FAILED_MESSAGE } from '../i18n/errors';
 import { ResetCampaignButton } from './ResetCampaignButton';
 
 interface Props {
   children: ReactNode;
-  transportFactory?: () => Transport;
+  transportFactory?: (session: Session) => Transport;
 }
 
 type Phase = 'connecting' | 'ready' | 'failed';
@@ -23,8 +28,10 @@ type Phase = 'connecting' | 'ready' | 'failed';
 export function GameProvider({ children, transportFactory = createTransport }: Props) {
   const status = useGame((s) => s.status);
   const loadFailed = useGame((s) => s.loadFailed);
+  const sessionChanged = useGame((s) => s.sessionChanged);
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>('connecting');
+  const [sink] = useState(() => onlineSink(getSession()));
 
   useEffect(() => {
     const session = getSession();
@@ -32,7 +39,7 @@ export function GameProvider({ children, transportFactory = createTransport }: P
     setPhase('connecting');
     let transport: Transport;
     try {
-      transport = transportFactory();
+      transport = transportFactory(session);
     } catch {
       setPhase('failed');
       return;
@@ -51,11 +58,18 @@ export function GameProvider({ children, transportFactory = createTransport }: P
     };
   }, [transportFactory]);
 
+  useEffect(() => {
+    if (!sessionChanged) return;
+    clearSession();
+    navigate('/login', { state: { notice: SESSION_CHANGED_MESSAGE } });
+  }, [sessionChanged, navigate]);
+
+  if (sessionChanged) return null;
   if (phase === 'failed' || (phase === 'ready' && status === 'error')) {
     return (
       <div>
         <p role="alert">{loadFailed ? LOAD_FAILED_MESSAGE : 'Não foi possível conectar à mesa.'}</p>
-        {loadFailed && getSession()?.role === 'gm' && (
+        {loadFailed && getSession()?.actor.role === 'gm' && (
           <ResetCampaignButton onDone={() => setPhase(useGame.getState().status === 'ready' ? 'ready' : 'failed')} />
         )}
         <button
@@ -71,5 +85,12 @@ export function GameProvider({ children, transportFactory = createTransport }: P
     );
   }
   if (phase !== 'ready' || status !== 'ready') return <p>Conectando…</p>;
-  return <>{children}</>;
+  return sink ? <ImageSinkProvider sink={sink}>{children}</ImageSinkProvider> : <>{children}</>;
+}
+
+/** Sessão online envia imagens ao Storage; a local mantém o destino padrão (data URL). */
+function onlineSink(session: Session | null): ImageSink | null {
+  if (session?.mode !== 'online') return null;
+  const supabase = getSupabase();
+  return supabase ? createUploadSink(session.campaignId, createOnlineUploadApi(supabase)) : null;
 }

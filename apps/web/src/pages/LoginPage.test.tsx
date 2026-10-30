@@ -4,11 +4,12 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import type { Character } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
 import { getSession } from '../session/session';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { LoginPage } from './LoginPage';
 
 const GM = { role: 'gm' } as const;
 const mkChar = (kind: 'pc' | 'npc', name: string): Omit<Character, 'id'> => ({
-  kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6,
+  kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, ...v2Fields(),
   hpVisibility: kind === 'pc' ? 'exact' : 'hidden',
   resources: { hp: { current: 10, max: 10 }, aura: { current: 5, max: 5 }, ammo: { current: 0, max: 0 } },
 });
@@ -36,7 +37,7 @@ describe('LoginPage', () => {
     const lia = Object.values(t.authority.getState().characters)[0]!;
     renderLogin(t);
     fireEvent.click(await screen.findByRole('button', { name: 'Lia' }));
-    expect(getSession()).toEqual({ role: 'player', characterId: lia.id });
+    expect(getSession()).toEqual({ mode: 'local', actor: { role: 'player', characterId: lia.id } });
     expect(await screen.findByText('Tela do jogador')).toBeTruthy();
   });
 
@@ -50,7 +51,7 @@ describe('LoginPage', () => {
   it('Entrar como Mestre grava a sessão de gm', async () => {
     renderLogin(createFakeTransport());
     fireEvent.click(screen.getByRole('button', { name: 'Entrar como Mestre' }));
-    expect(getSession()).toEqual({ role: 'gm' });
+    expect(getSession()).toEqual({ mode: 'local', actor: { role: 'gm' } });
     expect(await screen.findByText('Tela do mestre')).toBeTruthy();
   });
 });

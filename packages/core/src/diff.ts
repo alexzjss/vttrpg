@@ -9,11 +9,10 @@ export type Change =
   | { kind: 'setName'; name: string };
 
 /**
- * `baseRevision` é a última revisão entregue a esta audiência: o cliente só aplica o
- * update se seu estado estiver exatamente nela (revisões invisíveis à audiência não
- * geram update, então `revision` pode saltar sem que haja lacuna real).
+ * `seq` é a sequência contígua da audiência (1, 2, 3...): o cliente aplica o update
+ * se `seq === estado.seq + 1`, ignora se `seq <= estado.seq` e ressincroniza se houver lacuna.
  */
-export interface ProjectedUpdate { revision: number; baseRevision: number; changes: Change[]; cues: Cue[] }
+export interface ProjectedUpdate { seq: number; changes: Change[]; cues: Cue[] }
 
 /** JSON com chaves ordenadas, para comparação estrutural. */
 export function stableStringify(value: unknown): string {
@@ -55,7 +54,7 @@ export function diffProjection(before: ProjectedState, after: ProjectedState): C
   return changes;
 }
 
-export function applyChanges(p: ProjectedState, changes: Change[], revision: number): ProjectedState {
+export function applyChanges(p: ProjectedState, changes: Change[], seq: number): ProjectedState {
   const characters = { ...p.characters };
   const tokens = { ...p.scene.tokens };
   let scene: Omit<Scene, 'tokens'> = sceneMeta(p.scene);
@@ -72,5 +71,5 @@ export function applyChanges(p: ProjectedState, changes: Change[], revision: num
       case 'setName': name = ch.name; break;
     }
   }
-  return { ...p, name, revision, characters, scene: { ...scene, tokens }, encounter };
+  return { ...p, name, seq, characters, scene: { ...scene, tokens }, encounter };
 }

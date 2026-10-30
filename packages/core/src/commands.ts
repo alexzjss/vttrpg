@@ -2,7 +2,7 @@ import type { Cell, Character, Grid, Id, InitiativeEntry, ResourceKey } from './
 
 export type Command =
   | { type: 'createCharacter'; input: Omit<Character, 'id'> }
-  | { type: 'updateCharacter'; characterId: Id; patch: Partial<Omit<Character, 'id' | 'resources'>> }
+  | { type: 'updateCharacter'; characterId: Id; patch: Partial<Omit<Character, 'id' | 'resources' | 'defense' | 'stagger' | 'conditions' | 'actions' | 'cooldowns'>> }
   | { type: 'deleteCharacter'; characterId: Id }
   | { type: 'setResource'; characterId: Id; resource: ResourceKey; current?: number; max?: number }
   | { type: 'placeToken'; characterId: Id; cell: Cell; hidden?: boolean }
@@ -26,4 +26,12 @@ export type ErrorCode =
   | 'no_encounter'
   | 'encounter_active'
   | 'tokens_out_of_bounds'
-  | 'invalid_order';
+  | 'invalid_order'
+  | 'conflict';
+
+/** Todos os valores válidos de `Command['type']`; o servidor valida o corpo contra esta lista. */
+export const COMMAND_TYPES: readonly Command['type'][] = [
+  'createCharacter', 'updateCharacter', 'deleteCharacter', 'setResource',
+  'placeToken', 'moveToken', 'removeToken', 'setTokenHidden',
+  'updateGrid', 'startEncounter', 'nextTurn', 'reorderInitiative', 'endEncounter',
+];

@@ -1,13 +1,14 @@
 import {
   Authority,
   actorAudience,
+  type Actor,
   audienceKey,
   createCampaign,
+  migrateState,
   type Audience,
   type CampaignState,
 } from '@vtt/core';
 import { LOAD_FAILED, type ClientMessage, type WorkerMessage } from './protocol';
-import type { Session } from './transport';
 
 export interface CampaignStore {
   load(): Promise<CampaignState | undefined>;
@@ -16,21 +17,9 @@ export interface CampaignStore {
 export interface HostPort { postMessage(m: WorkerMessage): void }
 export interface HostDeps { newId?: () => string }
 
-interface PortEntry { port: HostPort; session: Session | null; audience: Audience | null }
+interface PortEntry { port: HostPort; session: Actor | null; audience: Audience | null }
 
 const newCampaign = () => createCampaign('local', 'Campanha local');
-
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isNum = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
-
-/** Confere o formato mínimo de uma campanha salva; dado inválido nunca deve virar Authority. */
-export function isValidCampaign(v: unknown): v is CampaignState {
-  if (!isObject(v) || !isNum(v.revision) || !isObject(v.characters)) return false;
-  if (!isObject(v.scene) || !isObject(v.scene.grid) || !isObject(v.scene.tokens)) return false;
-  const g = v.scene.grid;
-  if (!isNum(g.cols) || !isNum(g.rows) || !isNum(g.cellSize)) return false;
-  return isObject(v.encounter);
-}
 
 /** Lógica do worker sem APIs de worker: testável com portas falsas. */
 export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
@@ -43,8 +32,9 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
   const ready = store
     .load()
     .then((saved) => {
+      const migrated = saved === undefined ? undefined : migrateState(saved);
       if (saved === undefined) authority = new Authority(newCampaign(), { newId });
-      else if (isValidCampaign(saved)) authority = new Authority(saved, { newId });
+      else if (migrated) authority = new Authority(migrated, { newId });
       else {
         console.error('[workerHost] campanha salva com formato inválido');
         failed = true;

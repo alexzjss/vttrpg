@@ -1,6 +1,7 @@
-import { defaultResources, type Character, type HpVisibility, type ProjectedCharacter, type ResourceKey } from '@vtt/core';
+import { defaultDefense, defaultResources, defaultStagger, type Character, type HpVisibility, type ProjectedCharacter, type ResourceKey } from '@vtt/core';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { readImageFile } from './imageInput';
+import { ImageTooLargeError } from '../net/compressImage';
+import { useImageSink } from '../net/ImageSinkContext';
 import type { Send } from './types';
 
 interface Props {
@@ -38,6 +39,7 @@ export function CharacterForm({ character, send, onDone }: Props) {
     aura: String(initialResources.aura.max),
     ammo: String(initialResources.ammo.max),
   });
+  const sink = useImageSink();
   const [imageError, setImageError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,11 +47,11 @@ export function CharacterForm({ character, send, onDone }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const url = await readImageFile(file);
+      const url = await sink(file);
       setImages((prev) => ({ ...prev, [key]: url }));
       setImageError(null);
-    } catch {
-      setImageError('Não foi possível ler a imagem.');
+    } catch (err) {
+      setImageError(err instanceof ImageTooLargeError ? err.message : 'Não foi possível ler a imagem.');
     }
   };
 
@@ -73,6 +75,8 @@ export function CharacterForm({ character, send, onDone }: Props) {
           input: {
             kind, name: trimmed, ...images, speed: num(speed),
             hpVisibility: effectiveVisibility, resources,
+            defense: defaultDefense(), stagger: defaultStagger(),
+            affinities: {}, conditions: [], actions: [], cooldowns: {},
           },
         });
         if (r.ok) onDone();

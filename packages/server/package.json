@@ -1,0 +1,21 @@
+{
+  "name": "@vtt/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/router.ts",
+  "types": "./src/router.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "@vtt/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.8.2",
+    "vitest": "^2.1.9"
+  }
+}

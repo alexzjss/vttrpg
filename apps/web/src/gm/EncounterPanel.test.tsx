@@ -2,18 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createFakeTransport } from '../net/fakeTransport';
 import type { ProjectedState } from '@vtt/core';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { EncounterPanel } from './EncounterPanel';
 
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 3 };
 
 async function setup() {
   const fake = createFakeTransport();
-  const state = await fake.connect({ role: 'gm' });
+  const state = await fake.connect({ mode: 'local', actor: { role: 'gm' } });
   for (const name of ['Ana', 'Bruno']) {
     await fake.send({
       type: 'createCharacter',
       input: {
-        kind: 'pc', name, hpVisibility: 'exact', ...base,
+        kind: 'pc', name, hpVisibility: 'exact', ...base, ...v2Fields(),
         resources: { hp: { current: 5, max: 5 }, aura: { current: 1, max: 1 }, ammo: { current: 0, max: 0 } },
       },
     });

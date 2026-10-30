@@ -3,14 +3,15 @@ import { createCampaign, defaultResources } from './campaign';
 import { cuesFor } from './cues';
 import type { GameEvent } from './events';
 import type { CampaignState } from './model';
+import { makeCharacter } from './testing';
 import { project, type Audience } from './projection';
 import { applyEvents } from './reducer';
 
 function world(): CampaignState {
   const s = createCampaign('c', 'C');
   const base = { portrait: '', fullBodyArt: '', tokenImage: '', resources: defaultResources(), speed: 5 };
-  s.characters.p1 = { id: 'p1', kind: 'pc', name: 'Ana', hpVisibility: 'exact', ...base };
-  s.characters.n1 = { id: 'n1', kind: 'npc', name: 'Orc', hpVisibility: 'band', ...base };
+  s.characters.p1 = makeCharacter({ id: 'p1', kind: 'pc', name: 'Ana', hpVisibility: 'exact', ...base });
+  s.characters.n1 = makeCharacter({ id: 'n1', kind: 'npc', name: 'Orc', hpVisibility: 'band', ...base });
   s.scene.tokens = {
     t1: { id: 't1', characterId: 'p1', cell: { col: 0, row: 0 }, size: 1, hidden: false },
     tn: { id: 'tn', characterId: 'n1', cell: { col: 1, row: 0 }, size: 1, hidden: true },

@@ -3,7 +3,7 @@ import { createCampaign, type Cue } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
 import { createGameStore } from './gameStore';
 
-const GM = { role: 'gm' } as const;
+const GM = { mode: 'local', actor: { role: 'gm' } } as const;
 const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
 
 /** Atrasa o connect até release() ser chamado; depois segue o comportamento original. */
@@ -36,7 +36,7 @@ describe('gameStore: conexões concorrentes', () => {
     expect(store.getState().state?.name).toBe('Rápida');
 
     // o transporte superado não pode mais alimentar a store
-    slow.push({ revision: 1, baseRevision: 0, changes: [], cues: [cue] });
+    slow.push({ seq: 1, changes: [], cues: [cue] });
     expect(store.getState().cues).toEqual([]);
   });
 
@@ -60,7 +60,7 @@ describe('gameStore: conexões concorrentes', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     await store.getState().send({ type: 'deleteCharacter', characterId: 'nope' });
-    t.push({ revision: 1, baseRevision: 0, changes: [], cues: [cue] });
+    t.push({ seq: 1, changes: [], cues: [cue] });
     expect(store.getState().lastError).toBe('not_found');
 
     store.getState().disconnect();

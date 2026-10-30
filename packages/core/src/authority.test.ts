@@ -4,13 +4,17 @@ import { createCampaign, defaultResources } from './campaign';
 import type { Command } from './commands';
 import type { Actor, Character, Id } from './model';
 import { applyChanges } from './diff';
+import { makeCharacter } from './testing';
 import { audienceKey, type Audience, type ProjectedState } from './projection';
 
 const GM: Actor = { role: 'gm' };
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 5 };
 const mkChar = (
   kind: 'pc' | 'npc', name: string, hpVisibility: Character['hpVisibility'],
-): Omit<Character, 'id'> => ({ kind, name, hpVisibility, resources: defaultResources(), ...base });
+): Omit<Character, 'id'> => {
+  const { id: _id, ...rest } = makeCharacter({ kind, name, hpVisibility, resources: defaultResources(), ...base });
+  return rest;
+};
 
 function make() {
   let n = 0;
@@ -56,24 +60,35 @@ describe('Authority', () => {
     expect(second.result).toEqual({ ok: false, error: 'cell_occupied' });
   });
 
-  it('baseRevision é a última revisão entregue à audiência; ocultas não avançam', () => {
+  it('seq is contiguous per audience', () => {
     const a = make();
-    a.handle(GM, { type: 'createCharacter', input: mkChar('pc', 'Ana', 'exact') }); // rev 1
-    a.handle(GM, { type: 'createCharacter', input: mkChar('npc', 'Orc', 'hidden') }); // rev 2
+    a.handle(GM, { type: 'createCharacter', input: mkChar('pc', 'Ana', 'exact') }); // id1
+    a.handle(GM, { type: 'createCharacter', input: mkChar('npc', 'Orc', 'hidden') }); // id2
+    a.handle(GM, { type: 'placeToken', characterId: 'id2', cell: { col: 0, row: 0 }, hidden: true }); // id3
     const player: Audience = { kind: 'player', characterId: 'id1' };
-    expect(a.snapshotFor(player).revision).toBe(2);
-    const hiddenOnly = a.handle(GM, { type: 'setResource', characterId: 'id2', resource: 'hp', current: 3 }); // rev 3
-    expect(keys(hiddenOnly.updates)).toEqual(['gm']);
-    const gmU = hiddenOnly.updates[0]!.update;
-    expect(gmU.baseRevision).toBe(2);
-    const visible = a.handle(GM, { type: 'setResource', characterId: 'id1', resource: 'hp', current: 4 }); // rev 4
-    const p = visible.updates.find((u) => audienceKey(u.audience) === 'player:id1')!.update;
-    expect(p.revision).toBe(4);
-    expect(p.baseRevision).toBe(2); // pulou a 3, invisível a ele
-    const g = visible.updates.find((u) => audienceKey(u.audience) === 'gm')!.update;
-    expect(g.baseRevision).toBe(3);
-    const next = a.handle(GM, { type: 'setResource', characterId: 'id1', resource: 'hp', current: 5 });
-    expect(next.updates.find((u) => audienceKey(u.audience) === 'player:id1')!.update.baseRevision).toBe(4);
+    const before = a.snapshotFor(player).seq;
+    const seqs = { gm: [] as number[], player: [] as number[] };
+    const collect = (out: ReturnType<Authority['handle']>) => {
+      for (const u of out.updates) seqs[u.audience.kind].push(u.update.seq);
+    };
+    collect(a.handle(GM, { type: 'moveToken', tokenId: 'id3', to: { col: 1, row: 0 } }));
+    collect(a.handle(GM, { type: 'moveToken', tokenId: 'id3', to: { col: 2, row: 0 } }));
+    collect(a.handle(GM, { type: 'startEncounter', entries: [{ tokenId: 'id3', initiative: 1 }] }));
+    const gmBase = seqs.gm[0]! - 1;
+    expect(seqs.gm).toEqual([gmBase + 1, gmBase + 2, gmBase + 3]);
+    expect(seqs.player).toEqual([before + 1]);
+  });
+
+  it('snapshot does not change seq', () => {
+    const a = make();
+    a.handle(GM, { type: 'createCharacter', input: mkChar('pc', 'Ana', 'exact') });
+    const player: Audience = { kind: 'player', characterId: 'id1' };
+    const s0 = a.snapshotFor(player).seq;
+    a.snapshotFor(player);
+    a.snapshotFor(player);
+    const out = a.handle(GM, { type: 'setResource', characterId: 'id1', resource: 'hp', current: 4 });
+    const p = out.updates.find((u) => audienceKey(u.audience) === 'player:id1')!.update;
+    expect(p.seq).toBe(s0 + 1);
   });
 
   it('comando ok sem eventos não muda a revisão nem gera updates', () => {
@@ -83,21 +98,6 @@ describe('Authority', () => {
     const out = a.handle(GM, { type: 'moveToken', tokenId: 'id2', to: { col: 0, row: 0 } });
     expect(out.result).toEqual({ ok: true, revision: 2 });
     expect(out.updates).toEqual([]);
-  });
-
-  it('update.revision é igual a getState().revision após cada comando aceito', () => {
-    const a = make();
-    const cmds: Command[] = [
-      { type: 'createCharacter', input: mkChar('pc', 'Ana', 'exact') },
-      { type: 'placeToken', characterId: 'id1', cell: { col: 1, row: 1 } },
-      { type: 'moveToken', tokenId: 'id2', to: { col: 2, row: 1 } },
-    ];
-    for (const c of cmds) {
-      const out = a.handle(GM, c);
-      expect(out.result.ok).toBe(true);
-      expect(out.updates.length).toBeGreaterThan(0);
-      for (const u of out.updates) expect(u.update.revision).toBe(a.getState().revision);
-    }
   });
 
   it('PC deletado ainda recebe o update de remoção (audiência antes ou depois)', () => {
@@ -173,11 +173,11 @@ describe('Authority: varredura de vazamento', () => {
         const kind = state.scene.tokens[id] ? 'removeToken' : 'removeCharacter';
         expect(changes, `faltou ${kind} de ${id}`).toContainEqual({ kind, id });
       }
-      // espelho do cliente == snapshot (revisão avança mesmo sem update para a audiência)
+      // espelho do cliente == snapshot (sem update, a seq da audiência não avança)
       const mine = playerUpdates[0]?.update;
       mirror = mine
-        ? applyChanges(mirror, mine.changes, mine.revision)
-        : { ...mirror, revision: state.revision };
+        ? applyChanges(mirror, mine.changes, mine.seq)
+        : mirror;
       expect(mirror).toEqual(a.snapshotFor(player));
       assertSnapshotClean();
       return out;

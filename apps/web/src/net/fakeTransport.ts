@@ -30,7 +30,7 @@ export function createFakeTransport(initial?: CampaignState): FakeTransport {
 
   const snapshot = (): ProjectedState => {
     if (!session) throw new Error('not connected');
-    return t.authority.snapshotFor(actorAudience(session));
+    return t.authority.snapshotFor(actorAudience(session.actor));
   };
   const push = (u: ProjectedUpdate) => listeners.forEach((l) => l(u));
 
@@ -58,8 +58,8 @@ export function createFakeTransport(initial?: CampaignState): FakeTransport {
     async send(cmd): Promise<CommandResult> {
       t.sent.push(cmd);
       if (!session) return { ok: false, error: 'not_found' };
-      const { result, updates } = t.authority.handle(session, cmd);
-      const mine = audienceKey(actorAudience(session));
+      const { result, updates } = t.authority.handle(session.actor, cmd);
+      const mine = audienceKey(actorAudience(session.actor));
       for (const { audience, update } of updates) if (audienceKey(audience) === mine) push(update);
       return result;
     },

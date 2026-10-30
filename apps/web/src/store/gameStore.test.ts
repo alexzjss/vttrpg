@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Character, Cue } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { createGameStore } from './gameStore';
 
-const GM = { role: 'gm' } as const;
+const GM = { mode: 'local', actor: { role: 'gm' } } as const;
 const mkChar = (name: string): Omit<Character, 'id'> => ({
-  kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, hpVisibility: 'exact',
+  kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, hpVisibility: 'exact', ...v2Fields(),
   resources: { hp: { current: 10, max: 10 }, aura: { current: 5, max: 5 }, ammo: { current: 0, max: 0 } },
 });
 
@@ -14,7 +15,7 @@ describe('gameStore', () => {
     const store = createGameStore();
     await store.getState().connect(createFakeTransport(), GM);
     expect(store.getState().status).toBe('ready');
-    expect(store.getState().state?.revision).toBe(0);
+    expect(store.getState().state?.seq).toBe(0);
   });
 
   it('connect que falha vira status error', async () => {
@@ -31,23 +32,23 @@ describe('gameStore', () => {
     await store.getState().connect(t, GM);
     await store.getState().send({ type: 'createCharacter', input: mkChar('Ana') });
     await store.getState().send({ type: 'createCharacter', input: mkChar('Bia') });
-    expect(store.getState().state?.revision).toBe(2);
+    expect(store.getState().state?.seq).toBe(2);
     expect(Object.keys(store.getState().state!.characters)).toHaveLength(2);
     expect(t.resyncCalls).toBe(0);
   });
 
-  it('revisão pulada chama resync uma vez e iguala o estado ao do transporte', async () => {
+  it('seq pulada chama resync uma vez e iguala o estado ao do transporte', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     // o servidor avança sem que o store veja o primeiro update
-    t.authority.handle(GM, { type: 'createCharacter', input: mkChar('Ana') });
-    const out = t.authority.handle(GM, { type: 'createCharacter', input: mkChar('Bia') });
-    t.push(out.updates[0]!.update); // revision 2, store em 0
+    t.authority.handle(GM.actor, { type: 'createCharacter', input: mkChar('Ana') });
+    const out = t.authority.handle(GM.actor, { type: 'createCharacter', input: mkChar('Bia') });
+    t.push(out.updates[0]!.update); // seq 2, store em 0
     await new Promise((r) => setTimeout(r, 0));
     expect(t.resyncCalls).toBe(1);
     expect(store.getState().state).toEqual(await t.resync());
-    expect(store.getState().state?.revision).toBe(2);
+    expect(store.getState().state?.seq).toBe(2);
     expect(store.getState().cues).toEqual([]);
   });
 
@@ -64,40 +65,40 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
-    t.push({ revision: 1, baseRevision: 0, changes: [], cues: [cue] });
+    t.push({ seq: 1, changes: [], cues: [cue] });
     expect(store.getState().cues).toHaveLength(1);
     expect(store.getState().takeCues()).toEqual([cue]);
     expect(store.getState().takeCues()).toEqual([]);
     expect(store.getState().cues).toEqual([]);
   });
 
-  it('update com baseRevision igual ao estado aplica sem resync, mesmo com salto de revisão, e mantém cues', async () => {
+  it('update com seq = estado.seq + 1 aplica sem resync e mantém cues', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
-    t.push({ revision: 5, baseRevision: 0, changes: [{ kind: 'setName', name: 'Nova' }], cues: [cue] });
+    t.push({ seq: 1, changes: [{ kind: 'setName', name: 'Nova' }], cues: [cue] });
     expect(t.resyncCalls).toBe(0);
-    expect(store.getState().state?.revision).toBe(5);
+    expect(store.getState().state?.seq).toBe(1);
     expect(store.getState().state?.name).toBe('Nova');
     expect(store.getState().cues).toHaveLength(1);
   });
 
-  it('update com baseRevision diferente do estado dispara resync', async () => {
+  it('update com lacuna de seq dispara resync', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
-    t.push({ revision: 5, baseRevision: 3, changes: [], cues: [] });
+    t.push({ seq: 5, changes: [], cues: [] });
     await new Promise((r) => setTimeout(r, 0));
     expect(t.resyncCalls).toBe(1);
   });
 
-  it('update com revisão já refletida é ignorado, sem resync', async () => {
+  it('update com seq já refletida é ignorado, sem resync', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
-    t.push({ revision: 0, baseRevision: 0, changes: [], cues: [cue] });
+    t.push({ seq: 0, changes: [], cues: [cue] });
     await new Promise((r) => setTimeout(r, 0));
     expect(t.resyncCalls).toBe(0);
     expect(store.getState().cues).toEqual([]);
@@ -108,7 +109,7 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     for (let i = 1; i <= 60; i++) {
-      t.push({ revision: i, baseRevision: i - 1, changes: [], cues: [{ type: 'turn-started', tokenId: `t${i}`, round: i } satisfies Cue] });
+      t.push({ seq: i, changes: [], cues: [{ type: 'turn-started', tokenId: `t${i}`, round: i } satisfies Cue] });
     }
     const cues = store.getState().takeCues();
     expect(cues).toHaveLength(50);
@@ -121,26 +122,29 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     const cue = { type: 'turn-started', tokenId: 't1', round: 1 } satisfies Cue;
-    t.push({ revision: 5, baseRevision: 4, changes: [], cues: [cue] });
+    t.push({ seq: 5, changes: [], cues: [cue] });
     await new Promise((r) => setTimeout(r, 0));
     expect(t.resyncCalls).toBe(1);
     expect(store.getState().cues).toEqual([]);
   });
 
-  it('updates durante um resync em andamento são ignorados', async () => {
+  it('updates durante um resync ficam em buffer e reaplicam os posteriores ao snapshot', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
-    const snap = await t.resync();
+    const snap = { ...(await t.resync()), seq: 2 };
     let release!: () => void;
     t.resync = () => new Promise((r) => { release = () => r(snap); });
-    t.push({ revision: 5, baseRevision: 4, changes: [], cues: [] }); // inicia resync
-    t.push({ revision: 1, baseRevision: 0, changes: [], cues: [{ type: 'turn-started', tokenId: 'x', round: 1 } satisfies Cue] });
-    expect(store.getState().cues).toEqual([]);
-    expect(store.getState().state?.revision).toBe(0);
+    const cue = (round: number): Cue => ({ type: 'turn-started', tokenId: 'x', round });
+    t.push({ seq: 5, changes: [], cues: [] }); // lacuna: inicia resync
+    t.push({ seq: 1, changes: [], cues: [cue(1)] }); // anterior ao snapshot: descartado
+    t.push({ seq: 4, changes: [], cues: [cue(4)] }); // fora de ordem
+    t.push({ seq: 3, changes: [], cues: [cue(3)] });
+    expect(store.getState().state?.seq).toBe(0);
     release();
     await new Promise((r) => setTimeout(r, 0));
-    expect(store.getState().state).toEqual(snap);
+    expect(store.getState().state?.seq).toBe(4);
+    expect(store.getState().cues.map((c) => c.cue)).toEqual([cue(3), cue(4)]);
   });
 
   it('resync que falha põe status error', async () => {
@@ -148,7 +152,7 @@ describe('gameStore', () => {
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
     t.resync = async () => { throw new Error('x'); };
-    t.push({ revision: 9, baseRevision: 8, changes: [], cues: [] });
+    t.push({ seq: 9, changes: [], cues: [] });
     await new Promise((r) => setTimeout(r, 0));
     expect(store.getState().status).toBe('error');
   });
@@ -168,7 +172,7 @@ describe('gameStore', () => {
     await store.getState().connect(t, GM);
     await store.getState().send({ type: 'createCharacter', input: mkChar('Ana') });
     t.reset();
-    expect(store.getState().state?.revision).toBe(0);
+    expect(store.getState().state?.seq).toBe(0);
     expect(store.getState().state?.characters).toEqual({});
     expect(store.getState().cues).toEqual([]);
   });
@@ -195,5 +199,16 @@ describe('gameStore', () => {
     t.connect = async () => { throw new Error('outro'); };
     await store.getState().connect(t, GM);
     expect(store.getState()).toMatchObject({ status: 'error', loadFailed: false });
+  });
+});
+
+describe('gameStore send rejeitado', () => {
+  it('propaga a rejeição ao chamador e marca status error', async () => {
+    const store = createGameStore();
+    const t = createFakeTransport();
+    await store.getState().connect(t, GM);
+    t.send = async () => { throw new Error('http 500'); };
+    await expect(store.getState().send({ type: 'nextTurn' } as never)).rejects.toThrow('http 500');
+    expect(store.getState().status).toBe('error');
   });
 });
