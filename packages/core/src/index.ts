@@ -15,3 +15,5 @@ export * from './authority';
 export * from './importLegacy';
 export * from './topics';
 export * from './dice';
+export * from './rules/defense';
+export * from './rules/elements';
