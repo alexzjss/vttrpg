@@ -19,10 +19,13 @@ describe('parseDice', () => {
     expect(parse('d20').terms[0].term).toEqual({ count: 1, sides: 20 });
     expect(formatDice(parse('2d20kl1-2'))).toBe('2d20kl1-2');
   });
+  it('aceita maiúsculas', () => {
+    expect(formatDice(parse('2D20KH1'))).toBe('2d20kh1');
+  });
   it('ignora espaços', () => {
     expect(formatDice(parse(' 1d8 + 3 - 1d4 '))).toBe('1d8+3-1d4');
   });
-  it.each(['0d6', '1d1', '101d6', '1d1001', '2d6kh3', '2d6kh0', 'abc', '', '1d6+', '+1d6', '1d6++2'])(
+  it.each(['0d6', '1d1', '101d6', '1d1001', '2d6kh3', '2d6kh0', 'abc', '', '1d6+', '+1d6', '-1d6', 'd20kh', '1234567890', '1d6++2'])(
     'rejeita %j',
     (n) => {
       expect(parseDice(n)).toBeNull();
@@ -41,6 +44,8 @@ describe('diceBounds', () => {
     expect(diceBounds(parse('2d20kh1'))).toEqual({ min: 1, max: 20 });
     expect(diceBounds(parse('4d6kh3'))).toEqual({ min: 3, max: 18 });
     expect(diceBounds(parse('5-1d4'))).toEqual({ min: 1, max: 4 });
+    expect(diceBounds(parse('4d6kl2'))).toEqual({ min: 2, max: 12 });
+    expect(diceBounds(parse('0-2d6kh1'))).toEqual({ min: -6, max: -1 });
   });
 });
 
@@ -62,16 +67,21 @@ describe('rollDice', () => {
     const r = rollDice(parse('1d20+5-1d4'), () => 0);
     expect(r.modifier).toBe(5);
     expect(r.total).toBe(1 + 5 - 1);
-    expect(r.natural).toBeNull();
+    expect(r.natural).toBe(1);
     expect(rollDice(parse('1d20+5'), () => 0).natural).toBe(1);
     expect(rollDice(parse('1d6'), () => 0.999999).total).toBe(6);
   });
-  it('natural é null sem d20 único, com grupo negativo ou vários grupos', () => {
+  it('natural existe com um único d20 positivo mesmo com outros grupos', () => {
+    expect(rollDice(parse('1d20+1d4'), () => 0.5).natural).toBe(11);
+    expect(rollDice(parse('1d20+1d4+2'), () => 0.5).natural).toBe(11);
+  });
+  it('natural é null sem d20 único, com d20 negativo ou vários d20', () => {
     expect(rollDice(parse('2d6'), seededRng(1)).natural).toBeNull();
     expect(rollDice(parse('2d20'), seededRng(1)).natural).toBeNull();
     expect(rollDice(parse('1d20+1d20'), seededRng(1)).natural).toBeNull();
     expect(rollDice(parse('1d4-1d20'), seededRng(1)).natural).toBeNull();
-    expect(rollDice(parse('1d20+1d4'), seededRng(1)).natural).toBeNull();
+    expect(rollDice(parse('1d20-1d20'), seededRng(1)).natural).toBeNull();
+    expect(rollDice(parse('1d20+1d20kh1'), seededRng(1)).natural).toBeNull();
   });
   it('guarda a notação formatada', () => {
     expect(rollDice(parse(' d20 + 2'), seededRng(1)).notation).toBe('1d20+2');
@@ -103,8 +113,25 @@ describe('physicalRoll', () => {
     expect(r?.groups[0].kept).toEqual([17]);
     expect(r?.groups[1].rolled).toEqual([3]);
     expect(r?.total).toBe(20);
-    expect(r?.natural).toBeNull();
+    expect(r?.natural).toBe(17);
     expect(physicalRoll(parse('2d20kh1'), { dice: [5, 17] })?.natural).toBe(17);
+    expect(physicalRoll(parse('1d20+1d4'), { dice: [7, 3] })?.natural).toBe(7);
+  });
+  it('aceita totais exatamente no mínimo e no máximo', () => {
+    expect(physicalRoll(parse('1d20+2'), { total: 3 })?.total).toBe(3);
+    expect(physicalRoll(parse('1d20+2'), { total: 22 })?.total).toBe(22);
+  });
+  it('rejeita NaN e Infinity', () => {
+    expect(physicalRoll(parse('1d20'), { total: NaN })).toBeNull();
+    expect(physicalRoll(parse('1d20'), { total: Infinity })).toBeNull();
+  });
+  it('não lança com entrada malformada', () => {
+    const e = parse('1d20');
+    expect(physicalRoll(e, null as never)).toBeNull();
+    expect(physicalRoll(e, 'x' as never)).toBeNull();
+    expect(physicalRoll(e, { dice: 'x' } as never)).toBeNull();
+    expect(physicalRoll(e, { total: '22' } as never)).toBeNull();
+    expect(physicalRoll(e, {} as never)).toBeNull();
   });
 });
 
@@ -113,6 +140,10 @@ describe('doubleDice', () => {
     const base = rollDice(parse('1d8+3'), () => 0.5); // dado 5
     expect(base.total).toBe(8);
     expect(doubleDice(base).total).toBe(13);
+  });
+  it('em rolagem só com total, dobra a parte dos dados', () => {
+    const base = physicalRoll(parse('1d8+3'), { total: 8 });
+    expect(base && doubleDice(base).total).toBe(13);
   });
   it('respeita o sinal do grupo', () => {
     const base = physicalRoll(parse('1d8-1d4'), { dice: [5, 2] });

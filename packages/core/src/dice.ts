@@ -48,7 +48,7 @@ export function parseDice(notation: string): DiceExpr | null {
   if (!text) return null;
   // partes alternam termo, operador, termo...
   const parts = text.split(/([+-])/);
-  if (parts.length % 2 === 0 || (parts.length + 1) / 2 > MAX_TERMS) return null;
+  if ((parts.length + 1) / 2 > MAX_TERMS) return null;
   const terms: DiceExpr['terms'] = [];
   for (let i = 0; i < parts.length; i += 2) {
     const term = parseTerm(parts[i]);
@@ -112,8 +112,8 @@ function assemble(expr: DiceExpr, rolledByGroup: number[][]): DiceRoll {
     groups.push({ sides: term.sides, rolled, kept: keepDice(rolled, term.keep), sign });
   }
   const total = modifier + sum(groups.map((x) => x.sign * sum(x.kept)));
-  const only = groups.length === 1 ? groups[0] : null;
-  const natural = only && only.sides === 20 && only.sign === 1 && only.kept.length === 1 ? only.kept[0] : null;
+  const d20s = groups.filter((x) => x.sides === 20);
+  const natural = d20s.length === 1 && d20s[0].sign === 1 && d20s[0].kept.length === 1 ? d20s[0].kept[0] : null;
   return { notation: formatDice(expr), groups, modifier, total, natural };
 }
 
@@ -128,12 +128,14 @@ export function rollDice(expr: DiceExpr, rng: Rng): DiceRoll {
 
 /** Valida uma rolagem física; com `{ total }` não há como saber o natural (fica null). */
 export function physicalRoll(expr: DiceExpr, input: PhysicalRoll): DiceRoll | null {
+  if (typeof input !== 'object' || input === null) return null;
   if ('total' in input) {
     const { min, max } = diceBounds(expr);
-    if (!Number.isInteger(input.total) || input.total < min || input.total > max) return null;
+    if (typeof input.total !== 'number' || !Number.isInteger(input.total) || input.total < min || input.total > max) return null;
     const modifier = sum(expr.terms.map((t) => (typeof t.term === 'number' ? t.sign * t.term : 0)));
     return { notation: formatDice(expr), groups: [], modifier, total: input.total, natural: null };
   }
+  if (!Array.isArray(input.dice)) return null;
   const diceTerms = expr.terms.flatMap(({ term }) => (typeof term === 'number' ? [] : [term]));
   if (input.dice.length !== sum(diceTerms.map((t) => t.count))) return null;
   const rolledByGroup: number[][] = [];
@@ -147,9 +149,15 @@ export function physicalRoll(expr: DiceExpr, input: PhysicalRoll): DiceRoll | nu
   return assemble(expr, rolledByGroup);
 }
 
-/** Crítico: dobra a soma dos dados mantidos, sem dobrar o modificador. */
+/**
+ * Crítico: dobra a soma dos dados, sem dobrar o modificador. Só `total` é atualizado:
+ * `groups` continua com os dados originais, então não recalcule o total a partir deles.
+ * Em rolagem só com total (`groups` vazio), a parte dos dados é `total - modifier`.
+ */
 export function doubleDice(roll: DiceRoll): DiceRoll {
-  const diceSum = sum(roll.groups.map((g) => g.sign * sum(g.kept)));
+  const diceSum = roll.groups.length
+    ? sum(roll.groups.map((g) => g.sign * sum(g.kept)))
+    : roll.total - roll.modifier;
   return { ...roll, total: roll.total + diceSum };
 }
 
