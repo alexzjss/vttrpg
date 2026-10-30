@@ -14,3 +14,4 @@ export * from './cues';
 export * from './authority';
 export * from './importLegacy';
 export * from './topics';
+export * from './dice';
