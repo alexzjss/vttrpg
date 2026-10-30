@@ -43,6 +43,8 @@ export function createGameStore() {
   let unsubscribe: (() => void) | null = null;
   let unsubscribeSnapshot: (() => void) | null = null;
   let resyncing = false;
+  // Updates que chegam durante o resync: reaplicados (seq > snapshot) quando o snapshot chega.
+  let buffered: ProjectedUpdate[] = [];
   let cueId = 0;
 
   const dropSubscriptions = () => {
@@ -60,15 +62,23 @@ export function createGameStore() {
         const state = await t.resync();
         if (currentTransport === t) set({ state });
       } catch (e) {
+        buffered = [];
         if (currentTransport === t) set(failure(e));
       } finally {
         resyncing = false;
       }
+      const pending = buffered.sort((a, b) => a.seq - b.seq);
+      buffered = [];
+      if (currentTransport === t) for (const u of pending) onUpdate(t, u);
     }
 
     function onUpdate(t: Transport, u: ProjectedUpdate) {
       const { state } = get();
-      if (!state || resyncing) return;
+      if (!state) return;
+      if (resyncing) {
+        buffered.push(u);
+        return;
+      }
       if (u.seq <= state.seq) return; // já refletido (ex.: snapshot mais novo)
       if (u.seq !== state.seq + 1) {
         void resync(t); // lacuna real: descarta os cues do update e refaz o estado
@@ -90,6 +100,7 @@ export function createGameStore() {
       sessionChanged: false,
       async connect(t, s) {
         dropSubscriptions();
+        buffered = [];
         currentTransport = t;
         currentSession = s;
         set({ status: 'connecting', lastError: null, loadFailed: false, sessionChanged: false });
@@ -109,6 +120,7 @@ export function createGameStore() {
       },
       disconnect() {
         dropSubscriptions();
+        buffered = [];
         currentTransport = null;
         currentSession = null;
         set({ status: 'idle', state: null, cues: [], lastError: null, loadFailed: false, sessionChanged: false });

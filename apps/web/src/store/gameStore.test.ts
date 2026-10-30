@@ -127,20 +127,23 @@ describe('gameStore', () => {
     expect(store.getState().cues).toEqual([]);
   });
 
-  it('updates durante um resync em andamento são ignorados', async () => {
+  it('updates durante um resync ficam em buffer e reaplicam os posteriores ao snapshot', async () => {
     const store = createGameStore();
     const t = createFakeTransport();
     await store.getState().connect(t, GM);
-    const snap = await t.resync();
+    const snap = { ...(await t.resync()), seq: 2 };
     let release!: () => void;
     t.resync = () => new Promise((r) => { release = () => r(snap); });
-    t.push({ seq: 5, changes: [], cues: [] }); // inicia resync
-    t.push({ seq: 1, changes: [], cues: [{ type: 'turn-started', tokenId: 'x', round: 1 } satisfies Cue] });
-    expect(store.getState().cues).toEqual([]);
+    const cue = (round: number): Cue => ({ type: 'turn-started', tokenId: 'x', round });
+    t.push({ seq: 5, changes: [], cues: [] }); // lacuna: inicia resync
+    t.push({ seq: 1, changes: [], cues: [cue(1)] }); // anterior ao snapshot: descartado
+    t.push({ seq: 4, changes: [], cues: [cue(4)] }); // fora de ordem
+    t.push({ seq: 3, changes: [], cues: [cue(3)] });
     expect(store.getState().state?.seq).toBe(0);
     release();
     await new Promise((r) => setTimeout(r, 0));
-    expect(store.getState().state).toEqual(snap);
+    expect(store.getState().state?.seq).toBe(4);
+    expect(store.getState().cues.map((c) => c.cue)).toEqual([cue(3), cue(4)]);
   });
 
   it('resync que falha põe status error', async () => {
