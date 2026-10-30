@@ -4,13 +4,17 @@ import { createCampaign, defaultResources } from './campaign';
 import type { Command } from './commands';
 import type { Actor, Character, Id } from './model';
 import { applyChanges } from './diff';
+import { makeCharacter } from './testing';
 import { audienceKey, type Audience, type ProjectedState } from './projection';
 
 const GM: Actor = { role: 'gm' };
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 5 };
 const mkChar = (
   kind: 'pc' | 'npc', name: string, hpVisibility: Character['hpVisibility'],
-): Omit<Character, 'id'> => ({ kind, name, hpVisibility, resources: defaultResources(), ...base });
+): Omit<Character, 'id'> => {
+  const { id: _id, ...rest } = makeCharacter({ kind, name, hpVisibility, resources: defaultResources(), ...base });
+  return rest;
+};
 
 function make() {
   let n = 0;

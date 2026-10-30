@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { COMMAND_TYPES } from './commands';
+import { makeCharacter } from './testing';
 import { isWellFormedCommand } from './wellFormed';
 
 const pool = { current: 5, max: 10 };
+const { id: _id, ...v2 } = makeCharacter();
 const input = {
-  kind: 'pc', name: 'Ana', portrait: '', fullBodyArt: '', tokenImage: '', speed: 5, hpVisibility: 'exact',
-  resources: { hp: pool, aura: pool, ammo: pool },
+  ...v2, name: 'Ana', resources: { hp: pool, aura: pool, ammo: pool },
+};
+const action = {
+  id: 'a1', name: 'Golpe', description: '', category: 'ataque', costs: { aura: 2 }, cooldown: 1,
+  target: { kind: 'single', range: 1 }, test: { kind: 'attack', dice: '1d20' },
+  effects: [{ kind: 'damage', when: 'hit', dice: '1d8', element: 'fogo' }], approval: 'auto',
 };
 const grid = { cols: 20, rows: 12, cellSize: 64, visible: true };
 const cases: Array<[string, unknown, unknown[]]> = [
@@ -22,6 +28,11 @@ const cases: Array<[string, unknown, unknown[]]> = [
     { type: 'updateCharacter', characterId: 'a', patch: { speed: '3' } },
     { type: 'updateCharacter', characterId: '', patch: {} },
     { type: 'updateCharacter', characterId: 'a' },
+    { type: 'updateCharacter', characterId: 'a', patch: { defense: input.defense } },
+    { type: 'updateCharacter', characterId: 'a', patch: { stagger: input.stagger } },
+    { type: 'updateCharacter', characterId: 'a', patch: { conditions: [] } },
+    { type: 'updateCharacter', characterId: 'a', patch: { actions: [] } },
+    { type: 'updateCharacter', characterId: 'a', patch: { cooldowns: {} } },
   ]],
   ['deleteCharacter', { type: 'deleteCharacter', characterId: 'a' }, [{ type: 'deleteCharacter', characterId: 1 }]],
   ['setResource', { type: 'setResource', characterId: 'a', resource: 'hp', current: 3 }, [
@@ -94,5 +105,35 @@ describe('limites de tamanho', () => {
     const patch = (p: Record<string, unknown>) => ({ type: 'updateCharacter', characterId: 'a', patch: p });
     expect(isWellFormedCommand(patch({ name: 'a'.repeat(201) }))).toBe(false);
     expect(isWellFormedCommand({ type: 'deleteCharacter', characterId: 'a'.repeat(201) })).toBe(false);
+  });
+});
+
+describe('createCharacter com campos v2', () => {
+  const create = (over: Record<string, unknown>) => ({ type: 'createCharacter', input: { ...input, ...over } });
+  it('aceita ação, afinidades e condição válidas', () => {
+    expect(isWellFormedCommand(create({
+      actions: [action], affinities: { fogo: 'fraco' }, conditions: [{ id: 'queimando', duration: 2 }], cooldowns: { a1: 1 },
+    }))).toBe(true);
+  });
+  it('recusa ação inválida, afinidade desconhecida e condição inexistente', () => {
+    expect(isWellFormedCommand(create({ actions: [{ ...action, test: { kind: 'attack', dice: 'xx' } }] }))).toBe(false);
+    expect(isWellFormedCommand(create({ affinities: { plasma: 'fraco' } }))).toBe(false);
+    expect(isWellFormedCommand(create({ conditions: [{ id: 'inexistente', duration: 1 }] }))).toBe(false);
+  });
+  it('recusa defesa/stagger fora dos limites', () => {
+    expect(isWellFormedCommand(create({ defense: { ...input.defense, reduction: 2 } }))).toBe(false);
+    expect(isWellFormedCommand(create({ stagger: { ...input.stagger, duration: 11 } }))).toBe(false);
+    expect(isWellFormedCommand(create({ defense: { ...input.defense, current: input.defense.max + 1 } }))).toBe(false);
+  });
+  it('limites: descrição 4000/4001, nome 200/201, 30/31 ações, 20/21 condições', () => {
+    expect(isWellFormedCommand(create({ actions: [{ ...action, description: 'a'.repeat(4000) }] }))).toBe(true);
+    expect(isWellFormedCommand(create({ actions: [{ ...action, description: 'a'.repeat(4001) }] }))).toBe(false);
+    expect(isWellFormedCommand(create({ actions: [{ ...action, name: 'a'.repeat(200) }] }))).toBe(true);
+    expect(isWellFormedCommand(create({ actions: [{ ...action, name: 'a'.repeat(201) }] }))).toBe(false);
+    expect(isWellFormedCommand(create({ actions: Array.from({ length: 30 }, () => action) }))).toBe(true);
+    expect(isWellFormedCommand(create({ actions: Array.from({ length: 31 }, () => action) }))).toBe(false);
+    const cond = { id: 'cego', duration: 1 };
+    expect(isWellFormedCommand(create({ conditions: Array.from({ length: 20 }, () => cond) }))).toBe(true);
+    expect(isWellFormedCommand(create({ conditions: Array.from({ length: 21 }, () => cond) }))).toBe(false);
   });
 });

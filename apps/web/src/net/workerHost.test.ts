@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createCampaign, type Character, type CampaignState } from '@vtt/core';
 import type { WorkerMessage } from './protocol';
-import { createWorkerHost, isValidCampaign } from './workerHost';
+import { createWorkerHost } from './workerHost';
+import { v2Fields } from '../../../../packages/core/src/testing';
+
 
 const GM = { role: 'gm' } as const;
 const mkChar = (kind: 'pc' | 'npc', name: string): Omit<Character, 'id'> => ({
-  kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6,
+  kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, ...v2Fields(),
   hpVisibility: kind === 'pc' ? 'exact' : 'hidden',
   resources: { hp: { current: 10, max: 10 }, aura: { current: 5, max: 5 }, ammo: { current: 0, max: 0 } },
 });
@@ -237,20 +239,35 @@ describe('workerHost', () => {
   });
 });
 
-describe('isValidCampaign', () => {
-  it('aceita estado salvo sem audienceSeq (Fase 1)', () => {
-    const { audienceSeq: _a, ...legacy } = createCampaign('c', 'C');
-    expect(isValidCampaign(legacy)).toBe(true);
+describe('carga de estado salvo (migração)', () => {
+  const v1 = () => {
+    const { version: _v, settings: _s, log: _l, requests: _r, ...rest } = createCampaign('local', 'Antiga');
+    return { ...rest, revision: 4 };
+  };
+
+  it('carrega um estado v1 salvo e passa a salvar v2', async () => {
+    const store = { load: vi.fn(async () => v1() as unknown as CampaignState), save: vi.fn(async (_s: CampaignState) => {}) };
+    const msgs: WorkerMessage[] = [];
+    const send = createWorkerHost(store, { newId: () => 'id-1' }).attach({ postMessage: (m) => msgs.push(m) });
+    send({ t: 'connect', reqId: 1, session: GM });
+    send({ t: 'command', reqId: 2, cmd: { type: 'createCharacter', input: mkChar('pc', 'Ana') } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(msgs[0]).toMatchObject({ t: 'snapshot', state: { name: 'Antiga' } });
+    expect(store.save).toHaveBeenCalledTimes(1);
+    const saved = store.save.mock.calls[0]![0];
+    expect(saved).toMatchObject({ version: 2, revision: 5, settings: { requireApproval: false }, log: [], requests: {} });
+    expect(Object.values(saved.characters)[0]).toMatchObject({ conditions: [], actions: [], cooldowns: {} });
   });
 
-  it('aceita uma campanha real e rejeita formatos quebrados', () => {
-    const ok = createCampaign('c', 'C');
-    expect(isValidCampaign(ok)).toBe(true);
-    expect(isValidCampaign(JSON.parse(JSON.stringify(ok)))).toBe(true);
-    for (const bad of [
-      null, 1, 'x', [], {}, { ...ok, revision: '1' }, { ...ok, characters: null }, { ...ok, audienceSeq: 'x' },
-      { ...ok, scene: { ...ok.scene, grid: { cols: 1, rows: 1 } } }, { ...ok, scene: undefined },
-      { ...ok, scene: { ...ok.scene, tokens: undefined } }, { ...ok, encounter: undefined },
-    ]) expect(isValidCampaign(bad)).toBe(false);
+  it('formato inválido cai no caminho load_failed e nada é salvo', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const store = { load: vi.fn(async () => ({ revision: 'x' }) as unknown as CampaignState), save: vi.fn(async (_s: CampaignState) => {}) };
+    const msgs: WorkerMessage[] = [];
+    const send = createWorkerHost(store).attach({ postMessage: (m) => msgs.push(m) });
+    send({ t: 'connect', reqId: 1, session: GM });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(msgs[0]).toMatchObject({ t: 'error', reqId: 1 });
+    expect(store.save).not.toHaveBeenCalled();
+    err.mockRestore();
   });
 });

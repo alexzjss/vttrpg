@@ -5,13 +5,14 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import type { Character } from '@vtt/core';
 import { createFakeTransport } from './net/fakeTransport';
+import { v2Fields } from '../../../packages/core/src/testing';
 import { AppRoutes } from './routes';
 import { setSession } from './session/session';
 import { useGame } from './store/gameStore';
 
 const GM = { role: 'gm' } as const;
 const mkPc = (name: string): Omit<Character, 'id'> => ({
-  kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, hpVisibility: 'exact',
+  kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, hpVisibility: 'exact', ...v2Fields(),
   resources: { hp: { current: 10, max: 10 }, aura: { current: 5, max: 5 }, ammo: { current: 0, max: 0 } },
 });
 

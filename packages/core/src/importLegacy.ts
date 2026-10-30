@@ -1,5 +1,7 @@
 import type { Character, Pool, ResourceKey } from './model';
 import { defaultResources } from './campaign';
+import { sanitizeDefense, sanitizeStagger } from './migrate';
+import { ELEMENTS, type Affinity, type Element } from './rules/elements';
 
 /** Maior `version` de AppSnapshot que o legado grava (SNAPSHOT_VERSION em legacy/utils/database.ts). */
 export const LEGACY_MAX_VERSION = 8;
@@ -34,6 +36,35 @@ const POOLS: Array<[ResourceKey, string, string]> = [
   ['ammo', 'currentAmmo', 'maxAmmo'],
 ];
 
+const LEGACY_ELEMENTS: Record<string, Element> = { 'água': 'agua', 'escuridão': 'escuridao', 'físico': 'fisico', fisico: 'fisico' };
+const LEGACY_AFFINITIES: readonly string[] = ['fraco', 'resistente', 'imune'];
+
+function legacyAffinities(raw: unknown): Partial<Record<Element, Affinity>> {
+  const out: Partial<Record<Element, Affinity>> = {};
+  if (!isRecord(raw)) return out;
+  for (const [key, value] of Object.entries(raw)) {
+    const element = LEGACY_ELEMENTS[key] ?? (ELEMENTS.includes(key as Element) ? (key as Element) : undefined);
+    if (element && typeof value === 'string' && LEGACY_AFFINITIES.includes(value)) out[element] = value as Affinity;
+  }
+  return out;
+}
+
+function legacyDefense(raw: Raw) {
+  return sanitizeDefense({
+    armor: raw.defense, max: raw.defenseMax, current: raw.defenseCurrent, reduction: raw.defenseReduction,
+    regeneration: raw.defenseRegeneration, activationThreshold: raw.defenseActivationThreshold,
+    broken: raw.isDefenseBroken === undefined ? false : raw.isDefenseBroken,
+  });
+}
+
+function legacyStagger(raw: Raw) {
+  return sanitizeStagger({
+    max: raw.staggerMax, current: raw.staggerCurrent, recovery: raw.staggerRecovery,
+    damageMultiplier: raw.staggerDamageMultiplier, duration: raw.staggerDuration,
+    staggered: raw.isStaggered === undefined ? false : raw.isStaggered, turnsRemaining: raw.staggerTurnsRemaining,
+  });
+}
+
 function toDraft(raw: Raw, index: number): LegacyCharacterDraft {
   const defaults = defaultResources();
   const resources = { ...defaults };
@@ -57,6 +88,12 @@ function toDraft(raw: Raw, index: number): LegacyCharacterDraft {
       resources,
       speed: finite(raw.speed) ? raw.speed : DEFAULT_SPEED,
       hpVisibility: npc ? 'band' : 'exact',
+      defense: legacyDefense(raw),
+      stagger: legacyStagger(raw),
+      affinities: legacyAffinities(raw.affinities),
+      conditions: [],
+      actions: [],
+      cooldowns: {},
     },
     images,
   };

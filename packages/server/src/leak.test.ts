@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createCampaign, defaultResources, type Actor, type CampaignState, type Character, type Command, type ProjectedUpdate,
 } from '@vtt/core';
+import { makeCharacter } from '../../core/src/testing';
 import { processCommand } from './commands';
 import { MemoryStore } from './memoryStore';
 
@@ -9,7 +10,10 @@ const GM: Actor = { role: 'gm' };
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 5 };
 const mkChar = (
   kind: 'pc' | 'npc', name: string, hpVisibility: Character['hpVisibility'],
-): Omit<Character, 'id'> => ({ kind, name, hpVisibility, resources: defaultResources(), ...base });
+): Omit<Character, 'id'> => {
+  const { id: _id, ...rest } = makeCharacter({ kind, name, hpVisibility, resources: defaultResources(), ...base });
+  return rest;
+};
 
 const hiddenIds = (state: CampaignState): string[] => {
   const visible = new Set(

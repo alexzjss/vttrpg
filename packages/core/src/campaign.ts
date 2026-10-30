@@ -10,7 +10,11 @@ export function defaultResources(): Resources {
 
 export function createCampaign(campaignId: Id, name: string): CampaignState {
   return {
+    version: 2,
     campaignId,
+    settings: { requireApproval: false },
+    log: [],
+    requests: {},
     name,
     revision: 0,
     audienceSeq: {},

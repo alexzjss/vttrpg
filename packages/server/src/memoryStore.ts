@@ -1,4 +1,4 @@
-import type { CampaignState } from '@vtt/core';
+import { migrateState, type CampaignState } from '@vtt/core';
 import type { Broadcast, CampaignStore, CommitInput } from './store';
 
 /** Store em memória para testes: guarda estados e registra os broadcasts. */
@@ -18,7 +18,11 @@ export class MemoryStore implements CampaignStore {
   }
 
   async load(campaignId: string): Promise<CampaignState | null> {
-    return this.states.get(campaignId) ?? null;
+    const raw = this.states.get(campaignId);
+    if (raw === undefined) return null;
+    const state = migrateState(raw);
+    if (!state) throw new Error('store_failed');
+    return state;
   }
 
   async commit(input: CommitInput): Promise<'ok' | 'conflict'> {

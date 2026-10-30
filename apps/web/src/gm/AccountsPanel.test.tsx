@@ -11,11 +11,12 @@ vi.mock('../net/supabase', () => ({ getSupabase: () => null }));
 vi.mock('../tabletop/Tabletop', () => ({ Tabletop: () => null }));
 
 import { MestrePage } from '../pages/MestrePage';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { AccountsPanel } from './AccountsPanel';
 
 const mk = (kind: 'pc' | 'npc', name: string): Omit<Character, 'id'> => ({
   kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 5,
-  hpVisibility: kind === 'pc' ? 'exact' : 'hidden', resources: defaultResources(),
+  hpVisibility: kind === 'pc' ? 'exact' : 'hidden', resources: defaultResources(), ...v2Fields(),
 });
 
 async function setup() {

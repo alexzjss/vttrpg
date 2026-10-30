@@ -4,6 +4,7 @@ import type { Command } from './commands';
 import { decide } from './decide';
 import { diffProjection, applyChanges } from './diff';
 import type { Actor, CampaignState, Character } from './model';
+import { makeCharacter } from './testing';
 import { actorAudience, audienceKey, hpBand, project, type Audience } from './projection';
 import { applyEvents } from './reducer';
 
@@ -11,10 +12,7 @@ const GM: Audience = { kind: 'gm' };
 const P1: Audience = { kind: 'player', characterId: 'p1' };
 
 function char(id: string, over: Partial<Character> = {}): Character {
-  return {
-    id, kind: 'pc', name: id, portrait: '', fullBodyArt: '', tokenImage: '',
-    resources: defaultResources(), speed: 5, hpVisibility: 'exact', ...over,
-  };
+  return makeCharacter({ id, name: id, resources: defaultResources(), ...over });
 }
 function world(): CampaignState {
   const s = createCampaign('c', 'C');
@@ -120,7 +118,7 @@ describe('propriedade: applyChanges(diff) == project', () => {
   const gm = (cmd: Command): Step => ({ actor: { role: 'gm' }, cmd });
   const mk = (name: string, kind: 'pc' | 'npc', hpVisibility: Character['hpVisibility'] = 'exact'): Command => ({
     type: 'createCharacter',
-    input: { kind, name, portrait: '', fullBodyArt: '', tokenImage: '', resources: defaultResources(), speed: 5, hpVisibility },
+    input: (({ id: _id, ...rest }) => rest)(makeCharacter({ kind, name, resources: defaultResources(), hpVisibility })),
   });
   // ids gerados: char-1, char-2...; tokens: tk-N
   const setup: Step[] = [

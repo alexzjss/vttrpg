@@ -7,7 +7,9 @@
       "icon": "data:image/png;base64,iVBORw0KGgo=",
       "bannerImage": "data:image/png;base64,AAAA",
       "maxHp": 30, "currentHp": 22, "maxAura": 12, "currentAura": 7,
-      "maxAmmo": 6, "currentAmmo": 4, "baseInitiative": 3, "speed": 8, "role": "cast"
+      "maxAmmo": 6, "currentAmmo": 4, "baseInitiative": 3, "speed": 8, "role": "cast",
+      "defense": 14, "defenseMax": 30, "defenseCurrent": 25, "staggerMax": 80, "staggerDuration": 2,
+      "affinities": { "água": "fraco", "escuridão": "imune", "físico": "resistente", "fogo": "resistente", "plasma": "fraco", "raio": "bogus" }
     },
     {
       "id": "leg-2", "name": "Minimo",

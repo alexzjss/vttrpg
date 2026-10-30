@@ -3,15 +3,17 @@ import { createCampaign, defaultResources } from './campaign';
 import type { Command } from './commands';
 import { decide } from './decide';
 import type { Actor, CampaignState, Character } from './model';
+import { makeCharacter } from './testing';
 import { applyEvents } from './reducer';
 
 const GM: Actor = { role: 'gm' };
 const P1: Actor = { role: 'player', characterId: 'p1' };
 let n = 0;
 const ctx = (actor: Actor) => ({ actor, newId: () => `id-${++n}` });
-const input = (name: string, speed = 5): Omit<Character, 'id'> => ({
-  kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', resources: defaultResources(), speed, hpVisibility: 'exact',
-});
+const input = (name: string, speed = 5): Omit<Character, 'id'> => {
+  const { id: _id, ...rest } = makeCharacter({ name, speed, resources: defaultResources() });
+  return rest;
+};
 
 function base(): CampaignState {
   const s = createCampaign('c', 'C');

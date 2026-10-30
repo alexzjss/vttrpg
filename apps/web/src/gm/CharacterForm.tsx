@@ -1,4 +1,4 @@
-import { defaultResources, type Character, type HpVisibility, type ProjectedCharacter, type ResourceKey } from '@vtt/core';
+import { defaultDefense, defaultResources, defaultStagger, type Character, type HpVisibility, type ProjectedCharacter, type ResourceKey } from '@vtt/core';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { ImageTooLargeError } from '../net/compressImage';
 import { useImageSink } from '../net/ImageSinkContext';
@@ -75,6 +75,8 @@ export function CharacterForm({ character, send, onDone }: Props) {
           input: {
             kind, name: trimmed, ...images, speed: num(speed),
             hpVisibility: effectiveVisibility, resources,
+            defense: defaultDefense(), stagger: defaultStagger(),
+            affinities: {}, conditions: [], actions: [], cooldowns: {},
           },
         });
         if (r.ok) onDone();

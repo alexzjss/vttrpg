@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createCampaign } from '@vtt/core';
 import { createSupabaseStore } from './supabaseStore';
 import { createServiceClient } from './supabaseClient';
 
@@ -33,11 +34,23 @@ const input = {
 
 describe('createSupabaseStore', () => {
   it('load seleciona em snapshots por campaign_id e usa a revisão da coluna', async () => {
-    const { client, calls } = fakeClient({ data: { revision: 7, state: { campaignId: 'c1', revision: 3 } } });
+    const { client, calls } = fakeClient({ data: { revision: 7, state: { ...createCampaign('c1', 'Mesa'), revision: 3 } } });
     const state = await createSupabaseStore(client).load('c1');
     expect(calls.find((c) => c.kind === 'from')?.args).toEqual(['snapshots']);
     expect(calls.find((c) => c.kind === 'eq')?.args).toEqual(['campaign_id', 'c1']);
-    expect(state).toEqual({ campaignId: 'c1', revision: 7 });
+    expect(state).toEqual({ ...createCampaign('c1', 'Mesa'), revision: 7 });
+  });
+
+  it('load migra um estado v1 salvo para v2', async () => {
+    const { version: _v, settings: _s, log: _l, requests: _r, ...v1 } = createCampaign('c1', 'Mesa');
+    const { client } = fakeClient({ data: { revision: 2, state: v1 } });
+    const state = await createSupabaseStore(client).load('c1');
+    expect(state).toMatchObject({ version: 2, revision: 2, settings: { requireApproval: false }, log: [], requests: {} });
+  });
+
+  it('load lança store_failed quando o estado salvo é malformado', async () => {
+    const { client } = fakeClient({ data: { revision: 7, state: { campaignId: 'c1' } } });
+    await expect(createSupabaseStore(client).load('c1')).rejects.toThrow('store_failed');
   });
 
   it('load devolve null quando não há snapshot', async () => {

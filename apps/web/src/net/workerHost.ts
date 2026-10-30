@@ -4,6 +4,7 @@ import {
   type Actor,
   audienceKey,
   createCampaign,
+  migrateState,
   type Audience,
   type CampaignState,
 } from '@vtt/core';
@@ -20,19 +21,6 @@ interface PortEntry { port: HostPort; session: Actor | null; audience: Audience 
 
 const newCampaign = () => createCampaign('local', 'Campanha local');
 
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isNum = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
-
-/** Confere o formato mínimo de uma campanha salva; dado inválido nunca deve virar Authority. */
-export function isValidCampaign(v: unknown): v is CampaignState {
-  if (!isObject(v) || !isNum(v.revision) || !isObject(v.characters)) return false;
-  if (v.audienceSeq !== undefined && !isObject(v.audienceSeq)) return false;
-  if (!isObject(v.scene) || !isObject(v.scene.grid) || !isObject(v.scene.tokens)) return false;
-  const g = v.scene.grid;
-  if (!isNum(g.cols) || !isNum(g.rows) || !isNum(g.cellSize)) return false;
-  return isObject(v.encounter);
-}
-
 /** Lógica do worker sem APIs de worker: testável com portas falsas. */
 export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
@@ -44,8 +32,9 @@ export function createWorkerHost(store: CampaignStore, deps: HostDeps = {}) {
   const ready = store
     .load()
     .then((saved) => {
+      const migrated = saved === undefined ? undefined : migrateState(saved);
       if (saved === undefined) authority = new Authority(newCampaign(), { newId });
-      else if (isValidCampaign(saved)) authority = new Authority({ ...saved, audienceSeq: saved.audienceSeq ?? {} }, { newId });
+      else if (migrated) authority = new Authority(migrated, { newId });
       else {
         console.error('[workerHost] campanha salva com formato inválido');
         failed = true;

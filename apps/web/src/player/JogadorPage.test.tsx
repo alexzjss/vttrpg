@@ -5,6 +5,7 @@ import type { Id } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
 import { setSession } from '../session/session';
 import { useGame } from '../store/gameStore';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { JogadorPage } from '../pages/JogadorPage';
 
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 6 };
@@ -24,7 +25,7 @@ async function campaign() {
     { kind: 'npc', name: 'Goblin', hpVisibility: 'hidden', resources: res(7, 7) },
   ] as const;
   for (const input of inputs) {
-    await fake.send({ type: 'createCharacter', input: { ...base, ...input } });
+    await fake.send({ type: 'createCharacter', input: { ...base, ...v2Fields(), ...input } });
   }
   const chars = Object.values(fake.authority.getState().characters);
   const idOf = (name: string): Id => chars.find((c) => c.name === name)!.id;

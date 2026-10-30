@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { defaultResources, type ProjectedCharacter } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { CharacterForm } from './CharacterForm';
 
 const existing: ProjectedCharacter = {
   id: 'c1', kind: 'npc', name: 'Orc', portrait: '', fullBodyArt: '', tokenImage: '', speed: 4,
-  hpVisibility: 'band', resources: defaultResources(), hpBand: null,
+  hpVisibility: 'band', resources: defaultResources(), hpBand: null, ...v2Fields(),
 };
 
 describe('CharacterForm', () => {

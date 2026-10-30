@@ -5,6 +5,7 @@ import type { AuthAdmin } from './authAdmin';
 import { slugFromName } from './handlers/campaigns';
 import type { AssetRow, AssetsDep } from './assetsRepo';
 import type { ApiRequest, ServerDeps } from './http';
+import { makeCharacter } from '../../core/src/testing';
 import { MemoryStore } from './memoryStore';
 import type { AccountRow, AccountsRepo, CampaignRow, CampaignsRepo } from './repos';
 import { route } from './router';
@@ -15,10 +16,9 @@ const C3 = '00000000-0000-4000-8000-000000000003';
 const GM_ID = '00000000-0000-4000-8000-0000000000a1';
 const ANA_ID = '00000000-0000-4000-8000-0000000000a2';
 const base = { portrait: '', fullBodyArt: '', tokenImage: '', speed: 5 };
-const pc = (id: string, name: string): Character => ({
-  id, kind: 'pc', name, hpVisibility: 'exact', resources: defaultResources(), ...base,
-});
-const npc: Character = { id: 'n1', kind: 'npc', name: 'Orc', hpVisibility: 'hidden', resources: defaultResources(), ...base };
+const pc = (id: string, name: string): Character =>
+  makeCharacter({ id, kind: 'pc', name, hpVisibility: 'exact', resources: defaultResources(), ...base });
+const npc: Character = makeCharacter({ id: 'n1', kind: 'npc', name: 'Orc', hpVisibility: 'hidden', resources: defaultResources(), ...base });
 
 function world() {
   const accounts: AccountRow[] = [

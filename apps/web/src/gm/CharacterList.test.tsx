@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { defaultResources, type Character } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { CharacterList } from './CharacterList';
 
 const mk = (kind: 'pc' | 'npc', name: string): Omit<Character, 'id'> => ({
   kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 5,
-  hpVisibility: kind === 'pc' ? 'exact' : 'hidden', resources: defaultResources(),
+  hpVisibility: kind === 'pc' ? 'exact' : 'hidden', resources: defaultResources(), ...v2Fields(),
 });
 
 describe('CharacterList', () => {

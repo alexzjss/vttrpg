@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Character, Cue } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { createGameStore } from './gameStore';
 
 const GM = { mode: 'local', actor: { role: 'gm' } } as const;
 const mkChar = (name: string): Omit<Character, 'id'> => ({
-  kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, hpVisibility: 'exact',
+  kind: 'pc', name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, hpVisibility: 'exact', ...v2Fields(),
   resources: { hp: { current: 10, max: 10 }, aura: { current: 5, max: 5 }, ammo: { current: 0, max: 0 } },
 });
 

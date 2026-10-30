@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { CampaignState } from '@vtt/core';
+import { migrateState } from '@vtt/core';
 import type { CampaignStore, CommitInput } from './store';
 
 /** CampaignStore sobre o Supabase; o commit atômico é a função SQL `vtt_commit`. */
@@ -14,7 +14,9 @@ export function createSupabaseStore(client: SupabaseClient): CampaignStore {
       if (error) throw new Error('store_failed');
       if (!data) return null;
       // A coluna `revision` é a autoritativa.
-      return { ...(data.state as CampaignState), revision: data.revision as number };
+      const state = migrateState({ ...(data.state as object), revision: data.revision });
+      if (!state) throw new Error('store_failed');
+      return state;
     },
 
     async commit(input: CommitInput) {

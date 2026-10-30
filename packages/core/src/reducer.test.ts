@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createCampaign, defaultResources } from './campaign';
 import { applyEvent, applyEvents } from './reducer';
+import { makeCharacter } from './testing';
 import type { CampaignState, Character, Token } from './model';
 
-const pc = (id: string): Character => ({
-  id, kind: 'pc', name: id, portrait: '', fullBodyArt: '', tokenImage: '',
-  resources: defaultResources(), speed: 6, hpVisibility: 'exact',
-});
+const pc = (id: string): Character => makeCharacter({ id, name: id, resources: defaultResources(), speed: 6 });
 const npc = (id: string): Character => ({ ...pc(id), kind: 'npc', hpVisibility: 'band' });
 const tok = (id: string, characterId = id): Token => ({
   id, characterId, cell: { col: 0, row: 0 }, size: 1, hidden: false,

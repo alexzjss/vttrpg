@@ -91,4 +91,25 @@ describe('parseLegacyBackup', () => {
     expect(parseLegacyBackup({ version: 9, characters: [] })).toEqual({ ok: false, error: 'unsupported_version' });
     expect(parseLegacyBackup({ version: 8, characters: [] })).toEqual({ ok: true, characters: [] });
   });
+
+  it('mapeia defesa, stagger e afinidades do legado (nomes em ASCII)', () => {
+    const [full, min] = drafts(backup);
+    expect(full.input.defense).toMatchObject({ armor: 14, max: 30, current: 25 });
+    expect(full.input.stagger).toMatchObject({ max: 80, duration: 2, current: 0 });
+    expect(full.input.affinities).toEqual({ agua: 'fraco', escuridao: 'imune', fisico: 'resistente', fogo: 'resistente' });
+    expect(full.input.conditions).toEqual([]);
+    expect(full.input.actions).toEqual([]);
+    expect(full.input.cooldowns).toEqual({});
+    expect(min.input.defense.armor).toBe(10);
+    expect(min.input.affinities).toEqual({});
+  });
+
+  it('aceita "fisico" sem acento e sanitiza defesa/stagger inválidos', () => {
+    const c = one({ id: 'x', name: 'A', affinities: { fisico: 'fraco' }, defense: -5, defenseReduction: 3, staggerDuration: 99, staggerCurrent: NaN });
+    expect(c.input.affinities).toEqual({ fisico: 'fraco' });
+    expect(c.input.defense.armor).toBe(10);
+    expect(c.input.defense.reduction).toBe(0.2);
+    expect(c.input.stagger.duration).toBe(1);
+    expect(c.input.stagger.current).toBe(0);
+  });
 });

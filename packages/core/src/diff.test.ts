@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createCampaign, defaultResources } from './campaign';
 import { applyChanges, diffProjection, stableStringify } from './diff';
 import { project } from './projection';
+import { makeCharacter } from './testing';
 
 describe('stableStringify', () => {
   it('ignora a ordem das chaves', () => {
@@ -13,10 +14,7 @@ describe('stableStringify', () => {
 describe('diffProjection', () => {
   const base = () => {
     const s = createCampaign('c', 'C');
-    s.characters.p1 = {
-      id: 'p1', kind: 'pc', name: 'Ana', portrait: '', fullBodyArt: '', tokenImage: '',
-      resources: defaultResources(), speed: 5, hpVisibility: 'exact',
-    };
+    s.characters.p1 = makeCharacter({ id: 'p1', name: 'Ana', resources: defaultResources() });
     return s;
   };
   it('sem mudanças -> vazio', () => {

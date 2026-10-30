@@ -4,11 +4,12 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import type { Character } from '@vtt/core';
 import { createFakeTransport } from '../net/fakeTransport';
 import { getSession } from '../session/session';
+import { v2Fields } from '../../../../packages/core/src/testing';
 import { LoginPage } from './LoginPage';
 
 const GM = { role: 'gm' } as const;
 const mkChar = (kind: 'pc' | 'npc', name: string): Omit<Character, 'id'> => ({
-  kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6,
+  kind, name, portrait: '', fullBodyArt: '', tokenImage: '', speed: 6, ...v2Fields(),
   hpVisibility: kind === 'pc' ? 'exact' : 'hidden',
   resources: { hp: { current: 10, max: 10 }, aura: { current: 5, max: 5 }, ammo: { current: 0, max: 0 } },
 });

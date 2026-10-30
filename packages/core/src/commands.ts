@@ -2,7 +2,7 @@ import type { Cell, Character, Grid, Id, InitiativeEntry, ResourceKey } from './
 
 export type Command =
   | { type: 'createCharacter'; input: Omit<Character, 'id'> }
-  | { type: 'updateCharacter'; characterId: Id; patch: Partial<Omit<Character, 'id' | 'resources'>> }
+  | { type: 'updateCharacter'; characterId: Id; patch: Partial<Omit<Character, 'id' | 'resources' | 'defense' | 'stagger' | 'conditions' | 'actions' | 'cooldowns'>> }
   | { type: 'deleteCharacter'; characterId: Id }
   | { type: 'setResource'; characterId: Id; resource: ResourceKey; current?: number; max?: number }
   | { type: 'placeToken'; characterId: Id; cell: Cell; hidden?: boolean }

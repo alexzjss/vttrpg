@@ -4,6 +4,10 @@ import { createCampaign, defaultResources } from './campaign';
 describe('createCampaign', () => {
   it('cria a campanha com a cena e o encontro iniciais', () => {
     expect(createCampaign('c1', 'X')).toEqual({
+      version: 2,
+      settings: { requireApproval: false },
+      log: [],
+      requests: {},
       campaignId: 'c1',
       name: 'X',
       revision: 0,
