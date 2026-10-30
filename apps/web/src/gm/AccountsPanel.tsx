@@ -45,6 +45,8 @@ export function AccountsPanel({ state, campaignId, api }: Props) {
   const [password, setPassword] = useState('');
   const [characterId, setCharacterId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
   const loadSeq = useRef(0);
 
   const q = `campaignId=${encodeURIComponent(campaignId)}`;
@@ -115,14 +117,22 @@ export function AccountsPanel({ state, campaignId, api }: Props) {
 
   const toggle = (a: Account) => run(() => client.patch('/api/accounts', { id: a.id, active: !a.active }));
 
-  const resetPassword = async (a: Account) => {
-    const next = window.prompt(`Nova senha para ${a.username}:`);
-    if (!next) return;
-    if (next.length < MIN_PASSWORD) {
+  const openReset = (a: Account) => {
+    setResetting(a.id);
+    setNewPassword('');
+  };
+
+  const resetPassword = async (e: FormEvent, a: Account) => {
+    e.preventDefault();
+    if (newPassword.length < MIN_PASSWORD) {
       setNotice(null);
       return setError(SHORT_PASSWORD);
     }
-    await run(() => client.patch('/api/accounts', { id: a.id, password: next }), 'Senha redefinida.');
+    const ok = await run(() => client.patch('/api/accounts', { id: a.id, password: newPassword }), 'Senha redefinida.');
+    if (ok) {
+      setResetting(null);
+      setNewPassword('');
+    }
   };
 
   return (
@@ -141,9 +151,19 @@ export function AccountsPanel({ state, campaignId, api }: Props) {
                 aria-label={`${a.active ? 'Desativar' : 'Reativar'} ${a.username}`}>
                 {a.active ? 'Desativar' : 'Reativar'}
               </button>
-              <button type="button" disabled={busy} onClick={() => void resetPassword(a)}
+              <button type="button" disabled={busy} onClick={() => openReset(a)}
                 aria-label={`Redefinir senha de ${a.username}`}>Redefinir senha</button>
             </div>
+            {resetting === a.id && (
+              <form onSubmit={(e) => void resetPassword(e, a)}>
+                <label>Nova senha para {a.username}
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                    autoComplete="new-password" required />
+                </label>
+                <button type="submit" disabled={busy}>Salvar senha</button>
+                <button type="button" onClick={() => setResetting(null)}>Cancelar</button>
+              </form>
+            )}
           </li>
         ))}
       </ul>

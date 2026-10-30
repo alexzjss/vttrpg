@@ -109,21 +109,25 @@ describe('AccountsPanel', () => {
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/api/accounts', { id: 'a1', active: false }));
   });
 
-  it('redefinir senha usa prompt; cancelar não faz nada; curta mostra erro', async () => {
+  it('redefinir senha usa formulário com campo de senha; cancelar não faz nada; curta mostra erro', async () => {
     const { state, ana } = await setup();
     const api = fakeApi([{ id: 'a1', username: 'ana', characterId: ana.id, active: true }]);
     const prompt = vi.spyOn(window, 'prompt');
     render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
-    const btn = await screen.findByRole('button', { name: 'Redefinir senha de ana' });
-    prompt.mockReturnValueOnce(null);
-    fireEvent.click(btn);
-    prompt.mockReturnValueOnce('abc');
-    fireEvent.click(btn);
+    fireEvent.click(await screen.findByRole('button', { name: 'Redefinir senha de ana' }));
+    const field = screen.getByLabelText('Nova senha para ana') as HTMLInputElement;
+    expect(field.type).toBe('password');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByLabelText('Nova senha para ana')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Redefinir senha de ana' }));
+    fireEvent.change(screen.getByLabelText('Nova senha para ana'), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar senha' }));
     expect((await screen.findByRole('alert')).textContent).toBe('A senha precisa de pelo menos 6 caracteres.');
     expect(api.patch).not.toHaveBeenCalled();
-    prompt.mockReturnValueOnce('novasenha');
-    fireEvent.click(btn);
+    fireEvent.change(screen.getByLabelText('Nova senha para ana'), { target: { value: 'novasenha' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar senha' }));
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/api/accounts', { id: 'a1', password: 'novasenha' }));
+    expect(prompt).not.toHaveBeenCalled();
     prompt.mockRestore();
   });
 });
@@ -184,11 +188,11 @@ describe('AccountsPanel: robustez', () => {
   it('redefinir senha com sucesso mostra confirmação', async () => {
     const { state, ana } = await setup();
     const api = fakeApi([{ id: 'a1', username: 'ana', characterId: ana.id, active: true }]);
-    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('novasenha');
     render(<AccountsPanel state={state} campaignId="c-1" api={api} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Redefinir senha de ana' }));
+    fireEvent.change(screen.getByLabelText('Nova senha para ana'), { target: { value: 'novasenha' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar senha' }));
     expect((await screen.findByRole('status')).textContent).toBe('Senha redefinida.');
-    prompt.mockRestore();
   });
 
   it('ignora resposta antiga que chega depois da mais nova', async () => {
